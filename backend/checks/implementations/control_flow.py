@@ -1,6 +1,11 @@
 from typing import ClassVar
 
-import rust_bpmn_analyzer_bindings
+from rust_bpmn_analyzer_bindings import (
+    analyze_safeness,
+    analyze_dead_activities,
+    analyze_proper_completion,
+    analyze_option_to_complete
+)
 
 from checks import (
     Check,
@@ -20,7 +25,7 @@ class Synchronization(Check):
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
     def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
-        result = blg.analyze_safeness(self.model_xml)
+        result = analyze_safeness(self.model_xml)
         return CheckResult(
             id=self.id,
             name=result.property_name,
@@ -44,7 +49,7 @@ class DeadActivity(Check):
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
     def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
-        result = blg.analyze_dead_activities(self.model_xml)
+        result = analyze_dead_activities(self.model_xml)
         return CheckResult(
             id=self.id,
             name=result.property_name,
@@ -68,7 +73,7 @@ class ProperCompletion(Check):
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
     def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
-        result = blg.analyze_proper_completion(self.model_xml)
+        result = analyze_proper_completion(self.model_xml)
         return CheckResult(
             id=self.id,
             name=result.property_name,
@@ -92,7 +97,7 @@ class OptionToComplete(Check):
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
     def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
-        result = blg.analyze_option_to_complete(self.model_xml)
+        result = analyze_option_to_complete(self.model_xml)
         return CheckResult(
             id=self.id,
             name=self.name,
