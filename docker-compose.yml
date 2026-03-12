@@ -1,0 +1,13 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the directory where the rubrics and rules live
+      - ./backend/assignment:/app/assignment
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000

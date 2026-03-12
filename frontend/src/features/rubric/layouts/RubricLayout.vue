@@ -1,0 +1,394 @@
+<script lang="ts" setup>
+import {nextTick, onMounted, ref, watch} from "vue";
+import {useToast} from "primevue";
+import _ from "lodash";
+import {type Check, checkService, ApiError, rubricService, behavioralRuleService} from "@/services";
+import RubricSidebar from "@/features/rubric/components/RubricSidebar.vue";
+import RubricAlgorithmDialog from "@/features/rubric/components/RubricAlgorithmDialog.vue";
+import {Criterion, Rubric} from "@/features/rubric/types/rubric";
+import {CheckComplexity} from "@/features/rubric/types/check_complexity";
+import BpmnModeler from "bpmn-js/lib/Modeler";
+import {BehavioralRule} from "@/features/behavior/types/template.ts";
+import RubricBehavioralDialog from "@/features/rubric/components/RubricBehavioralDialog.vue";
+import RubricGroupDialog from "@/features/rubric/components/RubricGroupDialog.vue";
+import {BehavioralRuleGroup} from "@/features/behavior/types/group";
+import {groupService} from "@/services/groupService";
+
+const props = defineProps<{
+  modeler: BpmnModeler;
+  criteria: Criterion[];
+  isEditable?: boolean;
+  submissionName?: string;
+}>();
+
+const emit = defineEmits<{
+  updateRubric: [rubric: Rubric];
+  saveSubmission: [criteria: Criterion[]];
+}>();
+
+const toast = useToast();
+
+const totalScore = ref<number>(0);
+const correctPercentage = ref<string>("0.0");
+const correctScore = ref<number>(0);
+const currentHighlightIndex = ref<number>(-1);
+const currentHighlightElements = ref<string[]>([]);
+const availableChecks = ref<Check[] | null>(null);
+const availableRules = ref<BehavioralRule[] | null>(null);
+const availableTemplates = ref<BehavioralRule[] | null>(null);
+const isLoadingRules = ref<boolean>(false);
+const addDialogVisible = ref<boolean>(false);
+const behavioralAddDialogVisible = ref<boolean>(false);
+const groupAddDialogVisible = ref<boolean>(false);
+const addDialogType = ref<CheckComplexity | null>(null);
+const editingCheck = ref<Check | null>(null);
+
+const calculateScore = (): void => {
+  let total = 0;
+  let correct = 0;
+  props.criteria.forEach((item) => {
+    total += item['default_points'];
+    correct += item.fulfilled ? item['default_points'] : 0;
+  });
+
+  totalScore.value = total;
+  correctScore.value = correct;
+  correctPercentage.value = ((correct / total) * 100).toFixed(2);
+};
+
+const toggleState = (index: number): void => {
+  const criterion = props.criteria[index];
+  if (!criterion) return;
+
+  criterion.fulfilled = !criterion.fulfilled;
+  emit('saveSubmission', props.criteria);
+  calculateScore();
+};
+
+const clearHighlight = async (): Promise<void> => {
+  for (let i = 0; i < currentHighlightElements.value.length; i++) {
+    document.querySelectorAll(`[data-element-id="${currentHighlightElements.value[i]}"] > .djs-outline`)
+        .forEach((el) => {
+          const element = el as SVGRectElement;
+          element.style.visibility = 'hidden';
+          element.style.stroke = '';
+          element.style.fill = '';
+        });
+  }
+  currentHighlightElements.value = [];
+  currentHighlightIndex.value = -1;
+};
+
+const toggleHighlight = async (index: number, problematicElements: string[]): Promise<void> => {
+  await nextTick();
+
+  // If clicking the same criterion, deselect it
+  if (currentHighlightIndex.value === index) {
+    await clearHighlight();
+    return;
+  }
+
+  // Clear previous highlight if any
+  if (currentHighlightIndex.value !== -1) await clearHighlight();
+
+  // Highlight the new criterion
+  for (let i = 0; i < problematicElements.length; i++) {
+    document.querySelectorAll(`[data-element-id="${problematicElements[i]}"] > .djs-outline`)
+        .forEach((el) =>
+            (el as SVGRectElement).style.cssText = "fill: none; stroke: red !important; visibility: visible !important;"
+        );
+  }
+
+  currentHighlightIndex.value = index;
+  currentHighlightElements.value = problematicElements;
+
+  await nextTick();
+};
+
+
+
+const fetchAvailableChecks = async (): Promise<void> => {
+  try {
+    availableChecks.value = await checkService.getChecks();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      toast.add({severity: 'error', summary: 'Could not load checks', detail: error.detail});
+    } else {
+      toast.add({severity: 'error', summary: 'Could not load checks', detail: String(error)});
+    }
+  }
+};
+
+const fetchAvailableRules = async (): Promise<void> => {
+  isLoadingRules.value = true;
+  try {
+    availableRules.value = await behavioralRuleService.getBehavioralRules();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      toast.add({severity: 'error', summary: 'Could not load rules', detail: error.detail});
+    } else {
+      toast.add({severity: 'error', summary: 'Could not load rules', detail: String(error)});
+    }
+    availableRules.value = [];
+  } finally {
+    isLoadingRules.value = false;
+  }
+};
+
+const fetchAvailableTemplates = async (): Promise<void> => {
+  try {
+    availableTemplates.value = await behavioralRuleService.getBehavioralRuleTemplates();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      toast.add({severity: 'error', summary: 'Could not load templates', detail: error.detail});
+    } else {
+      toast.add({severity: 'error', summary: 'Could not load templates', detail: String(error)});
+    }
+    availableTemplates.value = [];
+  }
+};
+
+
+
+const updatePoints = (index: number, score: string): void => {
+  const criterion = props.criteria[index];
+  if (!criterion) return;
+
+  const n = Number(score);
+  if (Number.isNaN(n) || n <= 0) {
+    criterion.score = null;
+    criterion.fulfilled = false;
+  } else if (n === criterion.default_points) {
+    criterion.score = null;
+    criterion.fulfilled = true;
+  } else {
+    criterion.score = n;
+    criterion.fulfilled = true;
+  }
+  emit('saveSubmission', props.criteria);
+  calculateScore();
+};
+
+const resetCustomScore = (index: number): void => {
+  const criterion = props.criteria[index];
+  if (!criterion) return;
+
+  criterion.score = null;
+  criterion.fulfilled = false;
+  emit('saveSubmission', props.criteria);
+  calculateScore();
+};
+
+const openAddDialog = (category: CheckComplexity): void => {
+  addDialogType.value = category;
+  editingCheck.value = null;
+  addDialogVisible.value = true;
+};
+
+const openBehavioralAddDialog = (): void => {
+  behavioralAddDialogVisible.value = true;
+};
+
+const openGroupAddDialog = (): void => {
+  groupAddDialogVisible.value = true;
+};
+
+
+const handleSaveRubric = async (check: Check): Promise<void> => {
+  try {
+    const data = await rubricService.updateCheckCriterion(check);
+    emit("updateRubric", data);
+    const message = editingCheck.value
+        ? "Check criterion updated successfully."
+        : "Check criterion added successfully.";
+    toast.add({
+      severity: 'success',
+      summary: 'Rubric',
+      detail: message,
+      life: 5000
+    });
+    addDialogVisible.value = false;
+    editingCheck.value = null;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      toast.add({severity: 'error', summary: 'Rubric', detail: error.detail, life: 10000});
+    } else {
+      toast.add({severity: 'error', summary: 'Rubric', detail: String(error), life: 10000});
+    }
+  }
+};
+
+const handleNewBehavorialRule = async (rule: BehavioralRule): Promise<void> => {
+  try {
+    const data = await rubricService.updateBehavioralCriterion(rule);
+    emit("updateRubric", data);
+    toast.add({severity: 'success', summary: 'Rubric', detail: "Behavioral criterion added successfully.", life: 5000});
+    behavioralAddDialogVisible.value = false;
+
+    // Navigate to behavior editor with rule ID
+    window.open(`/behavior/${rule.id}`, '_blank');
+  } catch (error) {
+    if (error instanceof ApiError) {
+      toast.add({severity: 'error', summary: 'Rubric', detail: error.detail, life: 10000});
+    } else {
+      toast.add({severity: 'error', summary: 'Rubric', detail: String(error), life: 10000});
+    }
+  }
+};
+
+const handleSaveGroup = async (group: BehavioralRuleGroup): Promise<void> => {
+  try {
+    // Add group to rubric
+    const data = await groupService.addGroupToRubric(group);
+    emit("updateRubric", data);
+    
+    toast.add({
+      severity: 'success', 
+      summary: 'Rubric', 
+      detail: `Group "${group.name}" added successfully.`, 
+      life: 5000
+    });
+    
+    groupAddDialogVisible.value = false;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      toast.add({severity: 'error', summary: 'Rubric', detail: error.detail, life: 10000});
+    } else {
+      toast.add({severity: 'error', summary: 'Rubric', detail: String(error), life: 10000});
+    }
+  }
+};
+
+const handleDeleteCriterion = async (criterionId: string): Promise<void> => {
+  if (!criterionId) return;
+  
+  const confirmed = confirm("Are you sure you want to delete this criterion?");
+  if (!confirmed) return;
+
+  try {
+    const data = await rubricService.deleteCriterion(criterionId);
+    
+    // Refresh rubric
+    const rubric = await rubricService.getRubric();
+    emit("updateRubric", rubric);
+    
+    toast.add({
+      severity: 'success', 
+      summary: 'Rubric', 
+      detail: data.message, 
+      life: 5000
+    });
+    
+    if (data.unmerged_rules && data.unmerged_rules.length > 0) {
+      toast.add({
+        severity: 'info',
+        summary: 'Unmerged',
+        detail: `Restored rules: ${data.unmerged_rules.join(', ')}`,
+        life: 7000
+      });
+    }
+    
+    if (data.warning) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Warning',
+        detail: data.warning,
+        life: 10000
+      });
+    }
+    
+  } catch (error) {
+    if (error instanceof ApiError) {
+      toast.add({severity: 'error', summary: 'Rubric', detail: error.detail, life: 10000});
+    } else {
+      toast.add({severity: 'error', summary: 'Rubric', detail: String(error), life: 10000});
+    }
+  }
+};
+
+
+
+
+const handleEditCriterion = (criterion: Criterion): void => {
+  if (criterion.check_complexity === CheckComplexity.COMPLEX) {
+    // Navigate to behavior editor with rule ID
+    const url = props.submissionName 
+        ? `/behavior/${criterion.id}?submission=${encodeURIComponent(props.submissionName)}`
+        : `/behavior/${criterion.id}`;
+    window.open(url, '_blank');
+  } else {
+    // It's a check criterion, open the edit dialog
+    editingCheck.value = criterion as unknown as Check;
+    addDialogType.value = criterion.check_complexity;
+    addDialogVisible.value = true;
+  }
+};
+
+watch(
+    () => props.criteria,
+    () => calculateScore(),
+    {deep: true}
+);
+
+
+
+watch(addDialogVisible, (newValue) => {
+  if (!newValue) {
+    // Clear editing state when dialog is closed
+    editingCheck.value = null;
+  }
+});
+
+onMounted(() => {
+  calculateScore();
+  fetchAvailableChecks();
+  fetchAvailableRules();
+  fetchAvailableTemplates();
+});
+
+</script>
+
+<template>
+  <RubricAlgorithmDialog
+      v-model:visible="addDialogVisible"
+      :available-checks="availableChecks"
+      :category="addDialogType"
+      :existing-criteria="(criteria.filter(c => c.check_complexity !== CheckComplexity.COMPLEX) as unknown as Check[])"
+      :editing-check="editingCheck"
+      @save="handleSaveRubric"
+  />
+  <RubricBehavioralDialog
+      v-model:visible="behavioralAddDialogVisible"
+      :available-templates="availableTemplates || []"
+      @save="handleNewBehavorialRule"
+  />
+  <RubricGroupDialog
+      v-model:visible="groupAddDialogVisible"
+      :available-rules="availableRules || []"
+      :existing-criteria="criteria"
+      @save="handleSaveGroup"
+  />
+
+
+  <RubricSidebar
+      :correct-percentage="correctPercentage"
+      :correct-score="correctScore"
+      :criteria="criteria"
+      :current-highlight-index="currentHighlightIndex"
+      :total-score="totalScore"
+      :is-editable="isEditable"
+      :submission-filename="submissionName"
+      @open-add-dialog="openAddDialog"
+      @open-behavioral-add-dialog="openBehavioralAddDialog"
+      @open-add-group-dialog="openGroupAddDialog"
+      @reset-custom-score="resetCustomScore"
+      @toggle-highlight="toggleHighlight"
+      @toggle-state="toggleState"
+      @update-points="(index, score) => updatePoints(index, String(score))"
+      @edit-criterion="handleEditCriterion"
+      @delete-criterion="handleDeleteCriterion"
+  />
+</template>
+
+<style scoped>
+</style>

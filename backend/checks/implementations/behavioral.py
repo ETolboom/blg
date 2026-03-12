@@ -1,0 +1,1122 @@
+from __future__ import annotations
+import logging
+from typing import ClassVar, Optional
+
+from typing import ClassVar
+from dataclasses import dataclass, field
+from collections import deque
+
+from checks import Check, CheckComplexity, CheckFormInput, CheckResult
+from pydantic import BaseModel, Field
+
+from bpmn.bpmn import get_bpmn, Bpmn
+from bpmn.struct import PoolElement
+
+logger = logging.getLogger(__name__)
+
+
+class NodeHandle(BaseModel):
+    id: str
+    type: str
+    nodeId: str
+    position: str | None = None
+    x: float | None = None
+    y: float | None = None
+    width: float | None = None
+    height: float | None = None
+
+
+class Handles(BaseModel):
+    source: list[NodeHandle] | None = None
+    target: list[NodeHandle] | None = None
+
+
+class NodeData(BaseModel):
+    label: str
+    points: float | None = None
+    checkType: str | None = None
+    elementType: str | None = None
+    gatewayType: str | None = None
+    gatewayOutcomes: list[str] | None = None
+    isGatewayChecked: bool | None = None
+    isOutcomeChecked: bool | None = None
+    relationshipType: str | None = None
+    idealDistance: int | None = None
+    maxDistance: int | None = None
+    connectorType: str | None = None
+    eventType: str | None = None
+    eventPosition: str | None = None
+    eventBehavior: str | None = None
+
+
+class GraphNode(BaseModel):
+    id: str
+    type: str
+    handleBounds: Handles | None = None
+    data: NodeData
+    dimensions: dict | None = None
+    computedPosition: dict | None = None
+    position: dict | None = None
+    selected: bool | None = None
+    dragging: bool | None = None
+    resizing: bool | None = None
+    initialized: bool | None = None
+    isParent: bool | None = None
+    events: dict | None = None
+
+
+class Edge(BaseModel):
+    id: str
+    type: str
+    source: str
+    target: str
+    sourceHandle: str | None = None
+    targetHandle: str | None = None
+    data: dict | None = None
+    events: dict | None = None
+    label: str | None = None
+    sourceNode: GraphNode | None = None
+    targetNode: GraphNode | None = None
+    sourceX: float | None = None
+    sourceY: float | None = None
+    targetX: float | None = None
+    targetY: float | None = None
+    outcome: str | None = None
+
+
+class WorkflowData(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[Edge]
+
+    def next(self, node: GraphNode) -> list[GraphNode]:
+        """Get next nodes, automatically skipping over any notes nodes"""
+        outgoing_nodes: list[GraphNode] = []
+        for edge in self.edges:
+            if edge.source == node.id:
+                # Find the target node by ID
+                for target_node in self.nodes:
+                    if target_node.id == edge.target:
+                        # If target is a notes node, recursively get its next nodes
+                        if target_node.type == "notesNode":
+                            outgoing_nodes.extend(self.next(target_node))
+                        else:
+                            outgoing_nodes.append(target_node)
+                        break
+        return outgoing_nodes
+
+
+class DecisionTreeNode(BaseModel):
+    node_id: str
+    node_type: str
+    label: str
+    points: float = 0.0
+
+    # For gateway nodes
+    outcomes: list[str] | None = None
+    children: dict[str, DecisionTreeNode] | None = None
+
+    # For element nodes
+    next_node: DecisionTreeNode | None = None
+
+    # For tracking problematic paths
+    is_problematic: bool = False
+
+
+class ParsedTree(BaseModel):
+    total_points: int
+    nodes: list[DecisionTreeNode]
+
+
+class ConnectorNode(BaseModel):
+    node_id: str
+    node_type: str
+
+    # There are only 'XOR' and 'AND' nodes at the moment which have 2 inputs.
+    # Every time we pass by a node successfully we increment
+    visit_count: int = 0
+
+    minimum_visit_count: int
+
+    # Track which branches have visited this connector
+    visited_by_branches: set[str] = Field(default_factory=set)
+
+    def register_visit(self, branch_id: str) -> bool:
+        """Register a branch visit, return True if convergence complete"""
+        if branch_id not in self.visited_by_branches:
+            self.visited_by_branches.add(branch_id)
+            self.visit_count += 1
+
+        return self.visit_count >= self.minimum_visit_count
+
+
+@dataclass
+class MatchDetail:
+    """Detailed information about a single match"""
+
+    workflow_node_id: str
+    workflow_label: str
+    bpmn_element_id: str
+    bpmn_label: str
+    match_score: float
+    distance: int
+    ideal_distance: int
+    max_distance: int
+    minimal_match_threshold: float  # Minimum acceptable threshold (default: 0.6)
+    ideal_match_threshold: float  # Ideal threshold (default: 0.8)
+    is_correct: bool  # True if match_score >= minimal_match_threshold
+    is_ideal_distance: bool  # True if distance == ideal_distance
+    is_ideal_match: bool  # True if match_score >= ideal_match_threshold
+
+
+@dataclass
+class RuleEvaluationResult:
+    """Result from evaluating a single rule within a group"""
+
+    rule_id: str
+    rule_name: str
+    description: str
+    earned_points: float
+    confidence: float
+    match_details: list[MatchDetail]
+    success: bool  # True if evaluation completed without errors
+
+
+class BehavioralResult(BaseModel):
+    """Extended result type for behavioral grading with detailed match information"""
+
+    # CheckResult fields
+    id: str
+    name: str
+    category: str
+    description: str
+    fulfilled: bool
+    confidence: float
+    problematic_elements: list[str] = []
+    inputs: list[CheckFormInput] = []
+
+    # Additional behavioral-specific fields
+    match_details: list[MatchDetail] = []
+    earned_points: float = 0.0
+    total_matches: int = 0
+
+
+class GroupEvaluationResult(BaseModel):
+    """Result from evaluating a behavioral rule group"""
+
+    group_id: str
+    group_name: str
+    group_description: str
+    condition: str  # "XOR" or "AND"
+
+    # Individual rule results
+    rule_results: list[RuleEvaluationResult]
+
+    # Aggregated result (MAX scoring)
+    earned_points: float  # MAX of rule points
+    best_rule_id: str  # Which rule achieved max points
+    overall_confidence: float  # From best rule
+
+    # For rubric compatibility
+    match_details: list[MatchDetail]
+    problematic_elements: list[str]
+    fulfilled: bool
+
+
+@dataclass
+class TraversalContext:
+    """Complete traversal state for a branch"""
+
+    workflow_pos: GraphNode  # Current position in workflow
+    bpmn_pos: PoolElement  # Current position in BPMN model
+    match_scores: list[float] = field(default_factory=list)  # All match scores so far
+    match_details: list[MatchDetail] = field(
+        default_factory=list
+    )  # Detailed match info
+    accumulated_points: float = 0.0  # Accumulated points
+    ideal_distance: int = 1  # Updated by followedBy nodes
+    max_distance: int = 2  # Updated by followedBy nodes
+    minimal_match_threshold: float = 0.6  # Minimum acceptable match score
+    ideal_match_threshold: float = 0.8  # Ideal match score
+    visited_nodes: set[str] = field(default_factory=set)  # Cycle detection
+
+    def clone(self) -> "TraversalContext":
+        """Deep copy for branch exploration"""
+        return TraversalContext(
+            workflow_pos=self.workflow_pos,
+            bpmn_pos=self.bpmn_pos,
+            match_scores=self.match_scores.copy(),
+            match_details=self.match_details.copy(),
+            accumulated_points=self.accumulated_points,
+            ideal_distance=self.ideal_distance,
+            max_distance=self.max_distance,
+            minimal_match_threshold=self.minimal_match_threshold,
+            ideal_match_threshold=self.ideal_match_threshold,
+            visited_nodes=self.visited_nodes.copy(),
+        )
+
+    def update_distance_constraints(self, node: GraphNode):
+        """Update from followedBy connector"""
+        self.ideal_distance = node.data.idealDistance or 1
+        self.max_distance = node.data.maxDistance or 2
+
+    def apply_match_result(self, bpmn_result: tuple, workflow_node: GraphNode):
+        """Apply BPMN match result to context"""
+        visit_count, bpmn_elem, match_score = bpmn_result
+
+        self.bpmn_pos = bpmn_elem
+        self.match_scores.append(match_score)
+        self.accumulated_points += workflow_node.data.points or 0.0
+
+        # Create detailed match record
+        match_detail = MatchDetail(
+            workflow_node_id=workflow_node.id,
+            workflow_label=workflow_node.data.label,
+            bpmn_element_id=bpmn_elem.id,
+            bpmn_label=bpmn_elem.label,
+            match_score=match_score,
+            distance=visit_count,
+            ideal_distance=self.ideal_distance,
+            max_distance=self.max_distance,
+            minimal_match_threshold=self.minimal_match_threshold,
+            ideal_match_threshold=self.ideal_match_threshold,
+            is_correct=match_score >= self.minimal_match_threshold,
+            is_ideal_distance=visit_count == self.ideal_distance,
+            is_ideal_match=match_score >= self.ideal_match_threshold,
+        )
+        self.match_details.append(match_detail)
+
+        if visit_count > self.max_distance:
+            raise Exception(f"Distance {visit_count} exceeds max {self.max_distance}")
+
+        if visit_count > self.ideal_distance:
+            bpmn_elem.flagged = True
+
+    @property
+    def confidence(self) -> float:
+        """Calculate average match confidence"""
+        return (
+            sum(self.match_scores) / len(self.match_scores)
+            if self.match_scores
+            else 0.0
+        )
+
+
+@dataclass
+class DivergencePoint:
+    """Info about gateway divergence"""
+
+    gateway_node: GraphNode
+    bpmn_state: PoolElement  # BPMN position to restore
+    branch_starts: list[GraphNode]  # Outgoing branches
+    connector_id: str  # Where branches converge
+    connector_type: str  # "AND" or "XOR"
+
+
+def _find_start_node(nodes: list[GraphNode], edges: list[Edge]) -> GraphNode | None:
+    """Return the unique workflow node with no incoming edges, or None if none exists."""
+    # Collect all node IDs that are targets (have incoming edges)
+    target_node_ids = {edge.target for edge in edges}
+
+    # Find nodes that are not targets of any edge, excluding notes nodes
+    start_nodes = [
+        node
+        for node in nodes
+        if node.id not in target_node_ids and node.type != "notesNode"
+    ]
+
+    if len(start_nodes) == 0:
+        return None
+    elif len(start_nodes) == 1:
+        return start_nodes[0]
+    else:
+        # Multiple start nodes
+        start_node_ids = [node.id for node in start_nodes]
+        raise ValueError(
+            f"Multiple start nodes found: {start_node_ids}. Expected exactly one start node."
+        )
+
+
+def _extract_connector_nodes(nodes: list[GraphNode]) -> list[GraphNode]:
+    """Filter and return all AND/XOR connector nodes from a node list."""
+    connector_types = ["andConnector", "xorConnector"]
+    connector_nodes = [node for node in nodes if node.type in connector_types]
+    return connector_nodes
+
+
+class BehavioralRuleCheck(Check):
+    id: ClassVar[str] = "behavioral_rule"
+    name: ClassVar[str] = "Behavioral Rule"
+    description: ClassVar[str] = "Check the model based on a complex set of rules"
+    check_complexity: ClassVar[CheckComplexity] = CheckComplexity.COMPLEX
+    threshold: ClassVar[float] = 0.0
+    input_scheme: ClassVar[list[CheckFormInput]] = []
+
+    def is_applicable(self) -> bool:
+        """Return False — behavioral checks are not surfaced during onboarding."""
+        # Should not appear during onboarding
+        return False
+
+    def analyze_tree(self, tree: DecisionTreeNode) -> tuple[bool, list[str], float]:
+        """
+        Analyze the decision tree for behavioral rules
+        Returns: (fulfilled, problematic_elements, confidence)
+        """
+        problematic = []
+        total_points = 0.0
+        node_count = 0
+
+        def traverse(node: DecisionTreeNode):
+            nonlocal total_points, node_count
+
+            node_count += 1
+            total_points += node.points
+
+            # Check if node has problematic points
+            if node.points > self.threshold:
+                problematic.append(node.node_id)
+                node.is_problematic = True
+
+            # Traverse children
+            if node.children:
+                for child in node.children.values():
+                    traverse(child)
+            elif node.next_node:
+                traverse(node.next_node)
+
+        traverse(tree)
+
+        avg_points = total_points / node_count if node_count > 0 else 0.0
+        fulfilled = len(problematic) == 0
+        confidence = 1.0 - min(avg_points, 1.0)
+
+        return fulfilled, problematic, confidence
+
+    def _extract_and_map_connectors(
+        self, workflow: WorkflowData
+    ) -> dict[str, ConnectorNode]:
+        """Extract connectors and create lookup map"""
+        connector_list = _extract_connector_nodes(workflow.nodes)
+
+        connector_map = {}
+        for node in connector_list:
+            minimum_visit = 2 if node.data.label == "AND" else 1
+            connector_map[node.id] = ConnectorNode(
+                node_id=node.id,
+                node_type=node.data.label,
+                minimum_visit_count=minimum_visit,
+            )
+
+        return connector_map
+
+    def _find_convergence_point(
+        self, branches: list[GraphNode], workflow: WorkflowData
+    ) -> str:
+        """Find connector ID where ALL branches converge"""
+        # For each branch, find all reachable connectors
+        branch_connectors: list[set[str]] = []
+
+        for branch in branches:
+            connectors_in_path: set[str] = set()
+            visited: set[str] = set()
+            queue = deque([branch])
+
+            while queue:
+                current = queue.popleft()
+
+                if current.id in visited:
+                    continue
+                visited.add(current.id)
+
+                # Check if this is a connector
+                if current.type in ["andConnector", "xorConnector"]:
+                    connectors_in_path.add(current.id)
+
+                # Add next nodes to queue
+                next_nodes = workflow.next(current)
+                queue.extend(next_nodes)
+
+            branch_connectors.append(connectors_in_path)
+
+        # Find connectors that are reachable from ALL branches (intersection)
+        if not branch_connectors:
+            raise Exception("No branches provided for convergence point search")
+
+        common_connectors = branch_connectors[0]
+        for connectors_set in branch_connectors[1:]:
+            common_connectors = common_connectors.intersection(connectors_set)
+
+        if not common_connectors:
+            raise Exception("No common convergence connector found for branches")
+
+        # If multiple common connectors, return the closest one (first one encountered in BFS from any branch)
+        visited: set[str] = set()
+        queue = deque([branches[0]])
+
+        while queue:
+            current = queue.popleft()
+
+            if current.id in visited:
+                continue
+            visited.add(current.id)
+
+            if current.id in common_connectors:
+                return current.id
+
+            next_nodes = workflow.next(current)
+            queue.extend(next_nodes)
+
+        raise Exception("Failed to find closest common convergence connector")
+
+    def _find_bpmn_match(
+        self, context: TraversalContext, workflow_node: GraphNode, model: Bpmn
+    ) -> tuple[int, PoolElement | None, float]:
+        """Find matching BPMN element for workflow node"""
+        if workflow_node.data.checkType == "gateway":
+            gateway_type = getattr(workflow_node.data, "gatewayType", None)
+            gateway_outcomes = getattr(workflow_node.data, "gatewayOutcomes", None)
+            expected_outcomes = (
+                len(gateway_outcomes) if gateway_outcomes is not None else None
+            )
+
+            # Get label checking flags (default to False if not provided)
+            is_gateway_checked = (
+                getattr(workflow_node.data, "isGatewayChecked", False) or False
+            )
+            is_outcome_checked = (
+                getattr(workflow_node.data, "isOutcomeChecked", False) or False
+            )
+
+            if gateway_type and expected_outcomes:
+                return model.find_next_gateway(
+                    context.bpmn_pos.id,
+                    gateway_type,
+                    expected_outcomes,
+                    max_distance=context.max_distance,
+                    gateway_label=workflow_node.data.label,
+                    outcome_labels=gateway_outcomes if gateway_outcomes else [],
+                    check_gateway_label=is_gateway_checked,
+                    check_outcome_labels=is_outcome_checked,
+                    match_threshold=0.8,
+                )
+            else:
+                raise Exception(f"Gateway node missing gatewayType or gatewayOutcomes")
+        else:
+            return model.find_next_task(
+                context.bpmn_pos.id,
+                workflow_node.data.label,
+                max_distance=context.max_distance,
+                match_threshold=0.8,
+            )
+
+    def _merge_contexts(
+        self, branch_results: list[TraversalContext], base_points: float = 0.0
+    ) -> TraversalContext:
+        """Merge multiple branch contexts into one
+
+        Args:
+            branch_results: List of contexts from each branch
+            base_points: Points accumulated before divergence (to avoid double-counting)
+        """
+        # Use the last branch's context as base (it completed the convergence)
+        merged = branch_results[-1].clone()
+
+        # Merge match scores, details, and points from all branches
+        merged.match_scores = []
+        merged.match_details = []
+        merged.accumulated_points = base_points  # Start with base points
+        merged.visited_nodes = set()
+
+        for ctx in branch_results:
+            merged.match_scores.extend(ctx.match_scores)
+            merged.match_details.extend(ctx.match_details)
+            # Add delta points (points added during branch traversal)
+            merged.accumulated_points += ctx.accumulated_points - base_points
+            merged.visited_nodes.update(ctx.visited_nodes)
+
+        return merged
+
+    def _get_node_by_id(self, node_id: str, workflow: WorkflowData) -> GraphNode:
+        """Find workflow node by ID"""
+        for node in workflow.nodes:
+            if node.id == node_id:
+                return node
+        raise Exception(f"Node {node_id} not found")
+
+    def _traverse_from(
+        self,
+        context: TraversalContext,
+        model: Bpmn,
+        connectors: dict[str, ConnectorNode],
+        workflow: WorkflowData,
+    ) -> TraversalContext:
+        """Recursively traverse workflow with branch handling"""
+
+        while True:
+            next_nodes = list(workflow.next(context.workflow_pos))
+
+            if not next_nodes:
+                logger.debug("No more workflow nodes to process")
+                return context  # End of path
+
+            # MULTIPLE NEXT NODES (divergence point)
+            if len(next_nodes) != 1:
+                logger.debug("Detected divergence with %d branches", len(next_nodes))
+                return self._handle_divergence(
+                    context, next_nodes, connectors, model, workflow
+                )
+
+            # SINGLE NEXT NODE (linear flow)
+            next_node = next_nodes[0]
+
+            logger.debug("Processing workflow node %s", next_node.id)
+            logger.debug("Node label: '%s'", next_node.data.label)
+            logger.debug("Node type: %s", next_node.type)
+
+            # Handle connector nodes
+            if next_node.id in connectors:
+                connector = connectors[next_node.id]
+                branch_id = f"{context.workflow_pos.id}_br"
+
+                logger.debug(
+                    "Reached connector: %s (visit %d/%d)",
+                    connector.node_type,
+                    connector.visit_count + 1,
+                    connector.minimum_visit_count,
+                )
+
+                if connector.register_visit(branch_id):
+                    # Convergence complete, continue past connector
+                    logger.debug("Connector convergence complete, continuing...")
+                    context.workflow_pos = next_node
+                    continue
+                else:
+                    # Need more branches, pause here
+                    logger.debug("Connector needs more branches, pausing this branch")
+                    return context
+
+            # Handle followedBy connectors
+            elif next_node.data.relationshipType == "followedBy":
+                logger.debug(
+                    "Updating distance constraints: ideal=%s, max=%s",
+                    next_node.data.idealDistance,
+                    next_node.data.maxDistance,
+                )
+                context.update_distance_constraints(next_node)
+                context.workflow_pos = next_node
+                continue
+
+            # Handle element/gateway nodes
+            elif next_node.data.checkType in ["element", "gateway"]:
+                # Check if we're already at the target element (can happen after branch merges)
+                # Normalize labels by removing whitespace and converting to lowercase
+                bpmn_label_norm = " ".join(context.bpmn_pos.label.split()).lower()
+                workflow_label_norm = " ".join(next_node.data.label.split()).lower()
+
+                if bpmn_label_norm == workflow_label_norm:
+                    logger.debug(
+                        "Already at target element '%s', skipping search",
+                        next_node.data.label,
+                    )
+                    # Still record this as a perfect match
+                    context.match_scores.append(1.0)
+
+                    # Create match detail for this perfect match
+                    match_detail = MatchDetail(
+                        workflow_node_id=next_node.id,
+                        workflow_label=next_node.data.label,
+                        bpmn_element_id=context.bpmn_pos.id,
+                        bpmn_label=context.bpmn_pos.label,
+                        match_score=1.0,
+                        distance=0,  # Already at position
+                        ideal_distance=context.ideal_distance,
+                        max_distance=context.max_distance,
+                        minimal_match_threshold=context.minimal_match_threshold,
+                        ideal_match_threshold=context.ideal_match_threshold,
+                        is_correct=True,
+                        is_ideal_distance=True,  # Distance 0 is better than ideal
+                        is_ideal_match=True,  # Score 1.0 meets ideal threshold
+                    )
+                    context.match_details.append(match_detail)
+
+                    context.workflow_pos = next_node
+                    continue
+
+                bpmn_result = self._find_bpmn_match(context, next_node, model)
+                if not bpmn_result[1]:  # No match found
+                    logger.debug(
+                        "Problematic: Could not find BPMN element for '%s'",
+                        next_node.data.label,
+                    )
+
+                    # Create a problematic match detail with score 0
+                    match_detail = MatchDetail(
+                        workflow_node_id=next_node.id,
+                        workflow_label=next_node.data.label,
+                        bpmn_element_id="NOT_FOUND",
+                        bpmn_label="NOT_FOUND",
+                        match_score=0.0,
+                        distance=999,  # Invalid distance
+                        ideal_distance=context.ideal_distance,
+                        max_distance=context.max_distance,
+                        minimal_match_threshold=context.minimal_match_threshold,
+                        ideal_match_threshold=context.ideal_match_threshold,
+                        is_correct=False,
+                        is_ideal_distance=False,
+                        is_ideal_match=False,
+                    )
+                    context.match_details.append(match_detail)
+                    context.match_scores.append(0.0)
+
+                    # Don't award points for unmatched elements
+                    # Continue to next node without raising exception
+                    context.workflow_pos = next_node
+                    continue
+
+                visit_count, bpmn_elem, match_score = bpmn_result
+                logger.debug(
+                    "Found BPMN match '%s' at distance %d with score %.3f",
+                    bpmn_elem.label,
+                    visit_count,
+                    match_score,
+                )
+
+                context.apply_match_result(bpmn_result, next_node)
+                context.workflow_pos = next_node
+                continue
+
+            else:
+                # Unknown node type, move forward anyway
+                logger.debug("Unknown node type '%s', moving to next", next_node.type)
+                context.workflow_pos = next_node
+                continue
+
+    def _handle_divergence(
+        self,
+        context: TraversalContext,
+        branches: list[GraphNode],
+        connectors: dict[str, ConnectorNode],
+        model: Bpmn,
+        workflow: WorkflowData,
+    ) -> TraversalContext:
+        """Handle gateway with multiple outgoing branches"""
+
+        # Find convergence connector
+        connector_id = self._find_convergence_point(branches, workflow)
+        connector = connectors[connector_id]
+
+        logger.debug(
+            "Divergence will converge at connector: %s (ID: %s)",
+            connector.node_type,
+            connector_id,
+        )
+
+        # Save BPMN state at divergence
+        divergence_bpmn_state = context.bpmn_pos
+
+        if connector.node_type == "AND":
+            return self._handle_and_branches(
+                context,
+                branches,
+                connector,
+                divergence_bpmn_state,
+                connectors,
+                model,
+                workflow,
+            )
+        elif connector.node_type == "XOR":
+            return self._handle_xor_branches(
+                context,
+                branches,
+                connector,
+                divergence_bpmn_state,
+                connectors,
+                model,
+                workflow,
+            )
+        else:
+            raise Exception(f"Unknown connector type: {connector.node_type}")
+
+    def _handle_and_branches(
+        self,
+        context: TraversalContext,
+        branches: list[GraphNode],
+        connector: ConnectorNode,
+        bpmn_state: PoolElement,
+        connectors: dict[str, ConnectorNode],
+        model: Bpmn,
+        workflow: WorkflowData,
+    ) -> TraversalContext:
+        """All branches must reach connector"""
+
+        logger.debug("Handling AND branches (%d branches)", len(branches))
+
+        # Save the points before divergence to avoid double-counting
+        base_points = context.accumulated_points
+        logger.debug("Points before divergence: %s", base_points)
+
+        branch_results = []
+
+        for i, branch_start in enumerate(branches):
+            logger.debug("Exploring AND branch %d/%d", i + 1, len(branches))
+
+            # Clone context for this branch
+            branch_ctx = context.clone()
+            branch_ctx.workflow_pos = branch_start
+            branch_ctx.bpmn_pos = bpmn_state  # Reset to divergence point
+
+            # Traverse this branch recursively
+            result_ctx = self._traverse_from(branch_ctx, model, connectors, workflow)
+            branch_results.append(result_ctx)
+
+            logger.debug(
+                "Branch %d complete with %d matches, points: %s",
+                i + 1,
+                len(result_ctx.match_scores),
+                result_ctx.accumulated_points,
+            )
+
+        # Merge results with base points to avoid double-counting
+        logger.debug("Merging %d AND branch results", len(branch_results))
+        merged_ctx = self._merge_contexts(branch_results, base_points)
+        merged_ctx.workflow_pos = self._get_node_by_id(connector.node_id, workflow)
+        logger.debug("Merged points: %s", merged_ctx.accumulated_points)
+
+        # Continue past connector
+        logger.debug("Continuing past AND connector...")
+        return self._traverse_from(merged_ctx, model, connectors, workflow)
+
+    def _handle_xor_branches(
+        self,
+        context: TraversalContext,
+        branches: list[GraphNode],
+        connector: ConnectorNode,
+        bpmn_state: PoolElement,
+        connectors: dict[str, ConnectorNode],
+        model: Bpmn,
+        workflow: WorkflowData,
+    ) -> TraversalContext:
+        """At least one branch must succeed"""
+
+        logger.debug("Handling XOR branches (%d branches)", len(branches))
+        successful_results = []
+
+        for i, branch_start in enumerate(branches):
+            logger.debug("Trying XOR branch %d/%d", i + 1, len(branches))
+            try:
+                # Clone context for this branch
+                branch_ctx = context.clone()
+                branch_ctx.workflow_pos = branch_start
+                branch_ctx.bpmn_pos = bpmn_state  # Reset to divergence
+
+                # Traverse this branch recursively
+                result_ctx = self._traverse_from(
+                    branch_ctx, model, connectors, workflow
+                )
+                successful_results.append(result_ctx)
+
+                logger.debug(
+                    "XOR branch %d succeeded with confidence %.3f",
+                    i + 1,
+                    result_ctx.confidence,
+                )
+            except Exception as e:
+                # Branch failed, try next
+                logger.debug("XOR branch %d failed: %s", i + 1, e)
+                continue
+
+        if not successful_results:
+            raise Exception("XOR: No branches succeeded")
+
+        # Pick best scoring branch
+        best_ctx = max(successful_results, key=lambda ctx: ctx.confidence)
+        logger.debug(
+            "Selecting best XOR branch (confidence: %.3f)", best_ctx.confidence
+        )
+        best_ctx.workflow_pos = self._get_node_by_id(connector.node_id, workflow)
+
+        # Continue past connector
+        logger.debug("Continuing past XOR connector...")
+        return self._traverse_from(best_ctx, model, connectors, workflow)
+
+    def check_behavior(self, workflow: WorkflowData) -> BehavioralResult:
+        """Analyze behavioral rules with AND/XOR connector support"""
+
+        logger.debug("BEHAVIORAL RULE CHECK WITH BRANCHING SUPPORT")
+
+        # 1. Find starting workflow node
+        workflow_start = _find_start_node(workflow.nodes, workflow.edges)
+        if not workflow_start:
+            raise Exception("Could not find root node in workflow")
+
+        logger.debug("Found starting workflow node: %s", workflow_start.id)
+        logger.debug("Starting node label: '%s'", workflow_start.data.label)
+
+        # 2. Extract and map connectors
+        connectors = self._extract_and_map_connectors(workflow)
+        logger.debug("Found %d connector nodes:", len(connectors))
+        for conn_id, conn in connectors.items():
+            logger.debug(
+                "  - %s connector (ID: %s, min_visits: %d)",
+                conn.node_type,
+                conn_id,
+                conn.minimum_visit_count,
+            )
+
+        # 3. Parse BPMN model
+        model = get_bpmn(self.model_xml)
+
+        # 4. Find starting BPMN element
+        result = model.find_task(workflow_start.data.label, match_threshold=0.8)
+        if not result:
+            raise Exception("Could not find start node in BPMN model")
+        bpmn_start, start_score = result
+
+        logger.debug(
+            "Found starting BPMN element: '%s' (score: %.3f)",
+            bpmn_start.label,
+            start_score,
+        )
+
+        # 5. Create initial traversal context
+        start_match_detail = MatchDetail(
+            workflow_node_id=workflow_start.id,
+            workflow_label=workflow_start.data.label,
+            bpmn_element_id=bpmn_start.id,
+            bpmn_label=bpmn_start.label,
+            match_score=start_score,
+            distance=0,  # Starting position
+            ideal_distance=1,
+            max_distance=2,
+            minimal_match_threshold=0.6,
+            ideal_match_threshold=0.8,
+            is_correct=start_score >= 0.6,
+            is_ideal_distance=True,
+            is_ideal_match=start_score >= 0.8,
+        )
+
+        initial_context = TraversalContext(
+            workflow_pos=workflow_start,
+            bpmn_pos=bpmn_start,
+            match_scores=[start_score],
+            match_details=[start_match_detail],
+            accumulated_points=0.0,
+        )
+
+        # 6. Traverse workflow with branch support
+        logger.debug("STARTING TRAVERSAL")
+
+        final_context = self._traverse_from(
+            initial_context, model, connectors, workflow
+        )
+
+        # 7. Calculate results
+        logger.debug("TRAVERSAL COMPLETE")
+
+        confidence = final_context.confidence
+        total_matches = len(final_context.match_scores)
+
+        # Round accumulated_points to avoid floating point errors (e.g., 1.20000002 -> 1.2)
+        earned_points_rounded = round(final_context.accumulated_points, 2)
+
+        logger.debug(
+            "Final Results: total_matches=%d, confidence=%.3f, earned_points=%s",
+            total_matches,
+            confidence,
+            earned_points_rounded,
+        )
+
+        return BehavioralResult(
+            id=self.id,
+            name=self.name,
+            category=self.check_complexity,
+            description=self.description,
+            fulfilled=True,
+            confidence=confidence,
+            problematic_elements=[],
+            inputs=[],
+            match_details=final_context.match_details,
+            earned_points=earned_points_rounded,
+            total_matches=total_matches,
+        )
+
+    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+        """Not supported — use check_behavior() instead."""
+        raise Exception("Not applicable to behavioral rule check")
+
+
+class BehavioralGroupEvaluator:
+    """Evaluates template groups with XOR/AND conditions and MAX scoring"""
+
+    def __init__(self, model_xml: str, rule_manager):
+        """Initialize evaluator with the BPMN XML and a rule manager for loading rules."""
+        self.model_xml = model_xml
+        self.rule_manager = rule_manager
+
+    def evaluate_group(self, group) -> GroupEvaluationResult:
+        """
+        Evaluate all rules in group and aggregate results
+
+        Steps:
+        1. Load all rules from group.rule_ids
+        2. Evaluate each using BehavioralRuleCheck.check_behavior()
+        3. Collect individual RuleEvaluationResult for each
+        4. Apply aggregation based on condition (XOR/AND)
+        5. Return GroupEvaluationResult with MAX score
+        """
+        checker = BehavioralRuleCheck(model_xml=self.model_xml)
+
+        rule_results = []
+        for rule_id in group.rule_ids:
+            rule = self.rule_manager.get_rule(rule_id)
+            if rule is None:
+                # Rule not found, treat as failed
+                rule_results.append(
+                    RuleEvaluationResult(
+                        rule_id=rule_id,
+                        rule_name=rule_id,
+                        description="Rule not found",
+                        earned_points=0.0,
+                        confidence=0.0,
+                        match_details=[],
+                        success=False,
+                    )
+                )
+                continue
+
+            workflow_data = WorkflowData(nodes=rule.nodes, edges=rule.edges)
+
+            try:
+                result = checker.check_behavior(workflow=workflow_data)
+                rule_results.append(
+                    RuleEvaluationResult(
+                        rule_id=rule_id,
+                        rule_name=rule.name,
+                        description=rule.description,
+                        earned_points=result.earned_points,
+                        confidence=result.confidence,
+                        match_details=result.match_details,
+                        success=True,
+                    )
+                )
+            except Exception as e:
+                # Rule failed to evaluate
+                logger.warning("Rule '%s' failed to evaluate: %s", rule_id, e)
+                rule_results.append(
+                    RuleEvaluationResult(
+                        rule_id=rule_id,
+                        rule_name=rule.name,
+                        description=rule.description,
+                        earned_points=0.0,
+                        confidence=0.0,
+                        match_details=[],
+                        success=False,
+                    )
+                )
+
+        return self._aggregate_results(group, rule_results)
+
+    def _aggregate_results(
+        self, group, rule_results: list[RuleEvaluationResult]
+    ) -> GroupEvaluationResult:
+        """
+        Aggregate rule results based on condition
+
+        XOR Logic (Alternative Solutions):
+        - At least ONE rule must succeed
+        - Points = MAX(successful_template_points)
+        - fulfilled = any template succeeded
+        - Use best rule's match_details and confidence
+
+        AND Logic (Required Features):
+        - ALL rules must succeed
+        - Points = MAX(all_template_points) if all succeeded, else 0
+        - fulfilled = all rules succeeded
+        - Merge match_details from all rules
+        """
+        if group.condition.value == "XOR":
+            successful = [r for r in rule_results if r.success and r.earned_points > 0]
+
+            if successful:
+                best = max(successful, key=lambda r: r.earned_points)
+                return GroupEvaluationResult(
+                    group_id=group.group_id,
+                    group_name=group.name,
+                    group_description=group.description,
+                    condition=group.condition.value,
+                    rule_results=rule_results,
+                    earned_points=best.earned_points,
+                    best_rule_id=best.rule_id,
+                    overall_confidence=best.confidence,
+                    match_details=best.match_details,
+                    problematic_elements=self._extract_problematic(best.match_details),
+                    fulfilled=True,
+                )
+            else:
+                # No rules succeeded
+                return GroupEvaluationResult(
+                    group_id=group.group_id,
+                    group_name=group.name,
+                    group_description=group.description,
+                    condition=group.condition.value,
+                    rule_results=rule_results,
+                    earned_points=0.0,
+                    best_rule_id="",
+                    overall_confidence=0.0,
+                    match_details=[],
+                    problematic_elements=[],
+                    fulfilled=False,
+                )
+
+        elif group.condition.value == "AND":
+            all_succeeded = all(r.success for r in rule_results)
+
+            if all_succeeded:
+                best = max(rule_results, key=lambda r: r.earned_points)
+                # Merge match_details from all rules
+                merged_details = []
+                for r in rule_results:
+                    merged_details.extend(r.match_details)
+
+                return GroupEvaluationResult(
+                    group_id=group.group_id,
+                    group_name=group.name,
+                    group_description=group.description,
+                    condition=group.condition.value,
+                    rule_results=rule_results,
+                    earned_points=best.earned_points,
+                    best_rule_id=best.rule_id,
+                    overall_confidence=best.confidence,
+                    match_details=merged_details,
+                    problematic_elements=self._extract_problematic(merged_details),
+                    fulfilled=True,
+                )
+            else:
+                # Not all rules succeeded
+                return GroupEvaluationResult(
+                    group_id=group.group_id,
+                    group_name=group.name,
+                    group_description=group.description,
+                    condition=group.condition.value,
+                    rule_results=rule_results,
+                    earned_points=0.0,
+                    best_rule_id="",
+                    overall_confidence=0.0,
+                    match_details=[],
+                    problematic_elements=[],
+                    fulfilled=False,
+                )
+        else:
+            raise ValueError(f"Unknown condition: {group.condition}")
+
+    def _extract_problematic(self, match_details: list[MatchDetail]) -> list[str]:
+        """Extract BPMN IDs where matches were suboptimal"""
+        problematic = []
+        for match in match_details:
+            if (
+                not match.is_correct
+                or not match.is_ideal_match
+                or not match.is_ideal_distance
+            ):
+                if match.bpmn_element_id not in problematic:
+                    problematic.append(match.bpmn_element_id)
+        return problematic

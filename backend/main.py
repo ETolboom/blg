@@ -1,0 +1,133 @@
+import json
+import logging
+import os
+import sys
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
+
+from checks.manager import CheckRegistry
+from routers import submissions, rubric
+from routers import checks as checks_router
+from routers import behavioral_rules, behavioral_rule_groups
+from rubric import Rubric
+from rules.manager import BehavioralRuleManager
+from services.submissions import SubmissionService
+
+logger = logging.getLogger(__name__)
+
+
+def get_rubric_from_disk(base_path: str) -> Rubric | None:
+    """Load and return a Rubric from disk, or None if not found or invalid."""
+    if os.path.exists(os.path.join(base_path, "rubric.json")):
+        try:
+            with open(os.path.join(base_path, "rubric.json")) as file:
+                rubric_data = json.load(file)
+            logger.info("Rubric loaded successfully")
+            rubric = Rubric(**rubric_data)
+
+            # Load reference XML from separate file
+            ref_path = os.path.join(base_path, "reference.bpmn")
+            if os.path.exists(ref_path):
+                with open(ref_path) as f:
+                    rubric.assignment.reference_xml = f.read()
+                logger.info("Reference XML loaded from reference.bpmn")
+
+            return rubric
+        except json.JSONDecodeError:
+            logger.error("rubric.json contains invalid JSON")
+            return None
+        except ValidationError as e:
+            logger.error("JSON data doesn't match Rubric model: %s", e)
+            return None
+        except Exception as e:
+            logger.error("Error loading rubric: %s", e)
+            return None
+    else:
+        return None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize app state (registry, rubric, rule manager, submission service) on startup."""
+    base_path = app.state.base_path
+
+    # Load checks during startup
+    registry = CheckRegistry()
+    registry.load()
+    app.state.check_registry = registry
+
+    # Load rubric from disk
+    app.state.rubric = get_rubric_from_disk(base_path)
+
+    # Initialize rule manager
+    app.state.rule_manager = BehavioralRuleManager(
+        rules_dir=os.path.join(base_path, "rules")
+    )
+
+    # Initialize submission service
+    app.state.submission_service = SubmissionService(base_path, app.state.rubric)
+
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.include_router(submissions.router, prefix="/api", tags=["submissions"])
+app.include_router(rubric.router, prefix="/api", tags=["rubric"])
+app.include_router(checks_router.router, prefix="/api", tags=["checks"])
+app.include_router(behavioral_rules.router, prefix="/api", tags=["behavioral-rules"])
+app.include_router(
+    behavioral_rule_groups.router, prefix="/api", tags=["behavioral-rule-groups"]
+)
+
+_FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.isdir(_FRONTEND_DIR):
+    from fastapi.responses import FileResponse
+
+    # Mount the static directory itself to serve JS, CSS, images (if any match)
+    app.mount("/assets", StaticFiles(directory=os.path.join(_FRONTEND_DIR, "assets")), name="assets")
+
+    # Serve the favicon directly
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def get_favicon():
+        return FileResponse(os.path.join(_FRONTEND_DIR, "favicon.ico"))
+
+    # Catch-all route to serve the SPA's index.html for any unhandled routes
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        return FileResponse(os.path.join(_FRONTEND_DIR, "index.html"))
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Please provide a folder path")
+        print("Usage: python main.py <folder path>")
+        sys.exit(1)
+
+    base_path = sys.argv[1]
+
+    # Initialize data directory structure
+    if not os.path.exists(base_path):
+        print(f"Directory '{base_path}' not found. Creating it...")
+        os.makedirs(base_path, exist_ok=True)
+
+    # Create required subdirectories
+    for subdir in ["submissions", "rules", "templates"]:
+        os.makedirs(os.path.join(base_path, subdir), exist_ok=True)
+
+    # Load checks during startup (dependencies loaded automatically)
+    try:
+        registry = CheckRegistry()
+        registry.load()
+    except Exception as e:
+        print(f"Could not load checks: {e}")
+        sys.exit(1)
+
+    # Set base_path before lifespan runs
+    app.state.base_path = base_path
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

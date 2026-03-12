@@ -1,0 +1,173 @@
+@import '@vue-flow/core/dist/style.css';
+@import '@vue-flow/core/dist/theme-default.css';
+@import '@vue-flow/controls/dist/style.css';
+@import '@vue-flow/minimap/dist/style.css';
+@import 'md-editor-v3/lib/style.css';
+@import "tailwindcss";
+
+@layer base {
+
+    html,
+    body,
+    #app {
+        @apply m-0 h-full;
+    }
+
+    #app {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+}
+
+@layer components {
+    .dnd-flow {
+        @apply flex flex-col h-full;
+    }
+
+    .dnd-flow aside {
+        @apply text-white font-bold border-r border-gray-200 py-[15px] px-[10px] text-xs;
+        background: #10b981bf;
+        box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .dnd-flow aside .nodes>* {
+        @apply mb-[10px] cursor-grab font-medium;
+        box-shadow: 5px 5px 10px 2px rgba(0, 0, 0, 0.25);
+    }
+
+    .dnd-flow aside .description {
+        @apply mb-[10px];
+    }
+
+    .dnd-flow .vue-flow-wrapper {
+        @apply flex-grow h-full;
+    }
+
+    @media screen and (min-width: 640px) {
+        .dnd-flow {
+            @apply flex-row;
+        }
+
+        .dnd-flow aside {
+            @apply min-w-[25%];
+        }
+    }
+
+    @media screen and (max-width: 639px) {
+        .dnd-flow aside .nodes {
+            @apply flex flex-row gap-[5px];
+        }
+    }
+
+    .dropzone-background {
+        @apply relative h-full w-full;
+    }
+
+    .dropzone-background .overlay {
+        @apply absolute top-0 left-0 h-full w-full flex items-center justify-center z-[1] pointer-events-none;
+    }
+
+    /* Node Groups Styling */
+    .node-group {
+        @apply mb-5 p-[10px] rounded-lg;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .node-group .group-title {
+        @apply text-sm font-bold mb-[10px] text-left text-white uppercase tracking-wide;
+    }
+
+    .node-group .nodes {
+        @apply flex flex-col gap-2;
+    }
+
+    /* Custom Node Preview Styles */
+    .custom-node {
+        @apply p-[10px] rounded-md bg-white text-slate-800 text-center font-semibold cursor-grab transition-all duration-200 border-2 border-transparent;
+    }
+
+    .custom-node:hover {
+        @apply -translate-y-0.5;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .custom-node:active {
+        @apply cursor-grabbing;
+    }
+
+    /* Check Node Previews */
+    .check-node-preview {
+        @apply border-l-4 border-l-emerald-500;
+        background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+    }
+
+    /* Connector Node Previews */
+    .connector-node-preview {
+        @apply font-bold text-sm;
+    }
+
+    .connector-node-preview.xor {
+        @apply border-2 border-blue-500 bg-blue-100 text-blue-800;
+    }
+
+    .connector-node-preview.or {
+        @apply border-2 border-purple-500 bg-purple-100 text-purple-800;
+    }
+
+    .connector-node-preview.and {
+        @apply border-2 border-emerald-500 bg-emerald-100 text-emerald-800;
+    }
+
+    /* Relationship Connector Node Previews */
+    .relationship-node-preview {
+        @apply font-semibold text-xs;
+    }
+
+    .relationship-node-preview.followed {
+        @apply border-2 border-cyan-500 bg-cyan-100 text-cyan-900;
+    }
+
+    /* End Node Preview */
+    .end-node-preview {
+        @apply border-2 border-red-600 text-red-900;
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    }
+
+    /* Notes Node Preview */
+    .notes-node-preview {
+        @apply border-2 border-amber-400 text-amber-900;
+        background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+    }
+
+    /* Template Preview */
+    .template-preview {
+        @apply border-2 border-amber-500 font-bold text-amber-900;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    }
+
+
+
+    /* Mobile responsive adjustments */
+    @media screen and (max-width: 639px) {
+        .node-group .nodes {
+            @apply flex flex-row gap-[5px] flex-wrap;
+        }
+
+        .custom-node {
+            @apply flex-1 min-w-[100px];
+        }
+    }
+}
+
+.djs-palette {
+    top: 90px !important;
+}
+
+.p-fileupload-basic {
+    justify-content: start !important;
+}
+
+.vue-flow__handle {
+    width: 1rem;
+    height: 1rem;
+}

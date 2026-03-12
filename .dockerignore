@@ -1,0 +1,46 @@
+# Git and IDE
+.git
+.gitignore
+.idea/
+.vscode/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
+.Python
+backend/.venv/
+.venv/
+env/
+venv/
+ENV/
+backend/cache/
+env.bak/
+.ruff_cache/
+venv.bak/
+
+# Node / JS
+frontend/node_modules/
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+
+# Build outputs
+frontend/dist/
+backend/dist/
+target/
+build/
+*.egg-info/
+
+# Local data / environments
+backend/assignment/
+assignment/
+backend/example/
+example/
+.env
+.env.local
+
+# MacOS
+.DS_Store
