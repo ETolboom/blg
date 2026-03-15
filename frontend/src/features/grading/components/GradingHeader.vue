@@ -157,9 +157,9 @@ const handleUpload = async (event: FileUploadUploaderEvent) => {
     </div>
     
     <div class="flex flex-row gap-x-2 items-center">
-      <GradingButton v-tooltip.bottom="'Export current submission'" :disabled="!selectedSubmission" :href="selectedSubmission ? `./submissions/export?filename=${selectedSubmission.filename}` : '#'" as="a"
+      <GradingButton v-tooltip.bottom="'Export current submission'" :disabled="!selectedSubmission" :href="selectedSubmission ? `./api/submissions/export?filename=${selectedSubmission.filename}` : '#'" as="a"
                 :icon="FileSpreadsheet" rel="noopener" target="_blank"/>
-      <GradingButton v-tooltip.left="'Export all submissions'" as="a" href="./submissions/export/all" 
+      <GradingButton v-tooltip.left="'Export all submissions'" as="a" href="./api/submissions/export/all" 
                 :icon="Folder" rel="noopener" target="_blank"/>
     </div>
   </header>
