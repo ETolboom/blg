@@ -254,7 +254,7 @@ const onOnboarded = async () => {
                 <div v-show="activeTab === '0' && isModelerReady && modeler">
                   <GradingHeader :modeler="modeler!" :is-active="activeTab === '0'" @regrade="gradeSubmission" @loading="(loading) => isLoading = loading"/>
                 </div>
-                <div ref="bpmn-container" class="flex-1 w-full relative" :class="{'read-only-modeler': activeTab === '1'}"/>
+                <div ref="bpmn-container" class="flex-1 w-full relative" :class="{'read-only-modeler': activeTab !== '1'}"/>
                 <GradingZoomControls v-if="isModelerReady && modeler" :modeler="modeler"/>
             </div>
 
