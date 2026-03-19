@@ -7,6 +7,7 @@ import {checkService, ApiError, rubricService, submissionService} from "@/servic
 import type {Rubric, Rubric as RubricType} from "@/features/rubric/types/rubric";
 import GradingZoomControls from "@/features/grading/components/GradingZoomControls.vue";
 import GradingHeader from "@/features/grading/components/GradingHeader.vue";
+import ReferenceHeader from "@/features/grading/components/ReferenceHeader.vue";
 import OnboardingView from "@/features/onboarding/views/OnboardingView.vue";
 import RubricLayout from "@/features/rubric/layouts/RubricLayout.vue";
 
@@ -21,6 +22,9 @@ const submission_xml = ref<string>();
 const shouldOnboard = ref(false);
 const isLoading = ref(true);
 const isModelerReady = ref(false);
+const isSavingReference = ref(false);
+const isRegradingAfterSave = ref(false);
+const hasReferenceChanges = ref(false);
 
 const loadRubric = async () => {
   try {
@@ -76,6 +80,10 @@ onMounted(async () => {
     return;
   }
 
+  modeler.value.get('eventBus').on('commandStack.changed', () => {
+    if (activeTab.value === '1') hasReferenceChanges.value = true;
+  });
+
   window.addEventListener("resize", () => {
     modeler.value?.get('canvas').resized();
   });
@@ -113,6 +121,7 @@ const toggleReference = async () => {
     } else if (activeTab.value === '1') {
       if (reference_xml.value) {
         await modeler.value.importXML(reference_xml.value);
+        hasReferenceChanges.value = false;
       }
     }
     
@@ -180,6 +189,51 @@ const saveSubmission = async () => {
   }
 };
 
+const saveReference = async () => {
+  if (!modeler.value) return;
+  isSavingReference.value = true;
+  try {
+    const { xml } = await modeler.value.saveXML({ format: true });
+    if (!xml) throw new Error('Could not export XML from modeler');
+    await rubricService.updateReference(xml);
+    reference_xml.value = xml;
+    hasReferenceChanges.value = false;
+    toast.add({ severity: 'success', summary: 'Reference saved', life: 3000 });
+
+    if (submission_name.value && rubric.value) {
+      isSavingReference.value = false;
+      isRegradingAfterSave.value = true;
+      toast.add({ severity: 'info', summary: 'Re-grading submission…', life: 2000 });
+      try {
+        const result = await checkService.gradeSubmission(submission_name.value);
+        rubric.value.criteria = result.criteria;
+        toast.add({ severity: 'success', summary: 'Submission re-graded', life: 3000 });
+      } catch (error) {
+        toast.add({ severity: 'warn', summary: 'Could not re-grade submission', detail: String(error) });
+      } finally {
+        isRegradingAfterSave.value = false;
+      }
+    } else {
+      toast.add({ severity: 'info', summary: 'No submission loaded', detail: 'Open a submission to re-grade it against the updated reference', life: 4000 });
+    }
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Could not save reference', detail: String(error) });
+  } finally {
+    isSavingReference.value = false;
+  }
+};
+
+const clearReference = async () => {
+  if (!modeler.value || !reference_xml.value) return;
+  try {
+    await modeler.value.importXML(reference_xml.value);
+    modeler.value.get('canvas').zoom('fit-viewport');
+    hasReferenceChanges.value = false;
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Could not clear changes', detail: String(error) });
+  }
+};
+
 const onOnboarded = async () => {
   shouldOnboard.value = false;
   isLoading.value = true;
@@ -205,6 +259,10 @@ const onOnboarded = async () => {
     toast.add({severity: 'error', summary: 'Initialization failed', detail: 'Could not create modeler'});
     return;
   }
+
+  modeler.value.get('eventBus').on('commandStack.changed', () => {
+    if (activeTab.value === '1') hasReferenceChanges.value = true;
+  });
 
   window.addEventListener("resize", () => {
     modeler.value?.get('canvas').resized();
@@ -254,6 +312,12 @@ const onOnboarded = async () => {
                 <div v-show="activeTab === '0' && isModelerReady && modeler">
                   <GradingHeader :modeler="modeler!" :is-active="activeTab === '0'" @regrade="gradeSubmission" @loading="(loading) => isLoading = loading"/>
                 </div>
+                <ReferenceHeader v-show="activeTab === '1' && isModelerReady && modeler"
+                                :has-changes="hasReferenceChanges"
+                                :is-saving="isSavingReference"
+                                :is-regrading="isRegradingAfterSave"
+                                @save="saveReference"
+                                @clear="clearReference"/>
                 <div ref="bpmn-container" class="flex-1 w-full relative" :class="{'read-only-modeler': activeTab !== '1'}"/>
                 <GradingZoomControls v-if="isModelerReady && modeler" :modeler="modeler"/>
             </div>

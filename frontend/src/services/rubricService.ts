@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete } from './api';
+import { apiGet, apiPost, apiPut, apiDelete } from './api';
 import type { Assignment, Rubric, Criterion } from "@/features/rubric/types/rubric";
 import type { Check } from "@/services/checkService";
 import { BehavioralRule } from "@/features/behavior/types/template.ts";
@@ -70,5 +70,13 @@ export const rubricService = {
 
     async deleteSupplement(): Promise<{ message: string }> {
         return apiDelete<{ message: string }>('/rubric/supplement');
+    },
+
+    async updateReference(xml: string): Promise<{ message: string }> {
+        return apiPut<{ message: string }>(
+            '/rubric/reference',
+            JSON.stringify({ reference_xml: xml }),
+            'application/json'
+        );
     },
 };

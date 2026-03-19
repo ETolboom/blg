@@ -4,8 +4,10 @@ import {FunctionalComponent} from "vue";
 withDefaults(defineProps<{
   icon: FunctionalComponent;
   as?: string;
+  disabled?: boolean;
 }>(), {
-  as: 'button'
+  as: 'button',
+  disabled: false,
 });
 
 defineEmits<{
@@ -18,7 +20,9 @@ defineEmits<{
   <component
       :is="as"
       class="custom-icon-button"
-      @click="$emit('click')">
+      :class="{ 'custom-icon-button--disabled': disabled }"
+      :disabled="disabled || undefined"
+      @click="!disabled && $emit('click')">
     <component :is="icon"/>
   </component>
 </template>
@@ -59,5 +63,12 @@ defineEmits<{
 .custom-icon-button:focus-visible {
   outline: 2px solid hsl(225, 70%, 60%);
   outline-offset: 2px;
+}
+
+/* Disabled state */
+.custom-icon-button--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 </style>

@@ -2,6 +2,7 @@ import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,27 @@ async def get_current_rubric(request: Request) -> Rubric:
     if rubric is None:
         raise HTTPException(status_code=404, detail="Rubric not found")
     return rubric
+
+
+class ReferenceUpdateRequest(BaseModel):
+    reference_xml: str
+
+
+@router.put("/rubric/reference")
+async def update_reference(body: ReferenceUpdateRequest, request: Request) -> dict:
+    """Overwrite reference.bpmn on disk and update app state."""
+    rubric = request.app.state.rubric
+    if rubric is None:
+        raise HTTPException(status_code=404, detail="No rubric loaded")
+
+    base_path = request.app.state.base_path
+    with open(os.path.join(base_path, "reference.bpmn"), "w") as f:
+        f.write(body.reference_xml)
+
+    rubric.assignment.reference_xml = body.reference_xml
+    save_rubric(request, rubric)
+
+    return {"message": "Reference updated successfully"}
 
 
 @router.post("/rubric")
