@@ -10,14 +10,13 @@ This repository is a monorepo containing both the REST API back-end (`backend/`)
 
 ```
 blg/
-├── backend/                       # FastAPI back-end & Rust extensions
+├── backend/                       # FastAPI back-end
 │   ├── main.py                    # Entry point
 │   ├── checks/                    # Grading logic & rule engine
 │   ├── routers/                   # API routes
 │   ├── bpmn/                      # BPMN XML parser
 │   ├── rules/                     # Behavioral rule manager
 │   ├── rubric/                    # Rubric models
-│   ├── src/                       # Rust source for formal control-flow analysis
 │   └── example/                   # Sample data (rubric, submissions, rules)
 ├── frontend/                      # Vue 3 + PrimeVue front-end
 │   ├── src/                       # Components, Views, router
@@ -33,19 +32,19 @@ blg/
 ## Features
 
 ### Front-end (UI)
-- **Rubric management** — Define criteria with point values; supports simple checks and group criteria with XOR/AND logic.
-- **Visual rule builder** — Node-based editor to build behavioral validation rules (element checks, gateway checks, connectors).
-- **BPMN viewer** — Side-by-side view of student submission, reference model, and assignment PDF.
-- **Auto-grading interface** — Grade submissions against rubric criteria; highlights non-compliant BPMN elements.
-- **Onboarding wizard** — Step-by-step setup for uploading a reference model and configuring the initial rubric.
+- **Rubric management**: Define criteria with point values; supports simple checks and group criteria with XOR/AND logic.
+- **Visual rule builder**: Node-based editor to build behavioral validation rules (element checks, gateway checks, connectors).
+- **BPMN viewer**: Side-by-side view of student submission, reference model, and assignment PDF.
+- **Auto-grading interface**: Grade submissions against rubric criteria; highlights non-compliant BPMN elements.
+- **Onboarding wizard**: Step-by-step setup for uploading a reference model and configuring the initial rubric.
 
 ### Back-end (API)
-- **Automated grading** — runs a configurable set of structural, semantic and behavioral checks against student BPMN submissions.
-- **Behavioral rule engine** — graph-based workflow rules (nodes + edges) capture expected BPMN sequences; evaluated with AND/XOR branch logic.
-- **Semantic similarity** — uses `sentence-transformers/all-mpnet-base-v2` for label matching so minor wording differences don't break grading.
-- **Formal control-flow analysis** — deadlock and dead-activity detection via a compiled Rust extension.
-- **Excel export** — per-submission and bulk grading results exportable as `.xlsx`.
-- **Rule groups** — combine multiple behavioral rules under XOR (alternative solutions) or AND (all required) conditions.
+- **Automated grading**: runs a configurable set of structural, semantic and behavioral checks against student BPMN submissions.
+- **Behavioral rule engine**: graph-based workflow rules (nodes + edges) capture expected BPMN sequences; evaluated with AND/XOR branch logic.
+- **Semantic similarity**: uses `sentence-transformers/all-mpnet-base-v2` for label matching so minor wording differences don't break grading.
+- **Formal control-flow analysis**: deadlock and dead-activity detection.
+- **Excel export**: per-submission and bulk grading results exportable as `.xlsx`.
+- **Rule groups**: combine multiple behavioral rules under XOR (alternative solutions) or AND (all required) conditions.
 
 ---
 
@@ -53,55 +52,54 @@ blg/
 
 | Tool | Purpose |
 |---|---|
-| Python ≥ 3.10 | Back-end Runtime |
-| Node.js ≥ 20 | Front-end Runtime |
-| Docker (Optional) | Containerized deployment |
+| Python ≥ 3.10 | Back-end runtime |
+| Node.js ≥ 20 (or [Bun](https://bun.sh/)) | Front-end runtime |
+| Docker | Containerized deployment (optional) |
+
+> [`uv`](https://github.com/astral-sh/uv) (Python) and [`bun`](https://bun.sh/) (Node) are optional but recommended for faster installs. Where available they are used automatically on Linux/macOS via the Makefile.
 
 ---
 
-## Local Development (Native)
+## Installation & Running
 
-For convenience, a `Makefile` is provided at the root of the repository to simplify setup and execution.
+### Docker (all platforms)
 
-### 1. Installation
+The easiest way to run the full stack on any operating system:
 
-Install all dependencies in one go:
+```bash
+docker compose up --build -d   # build & start at http://localhost:8000
+docker compose down
+```
 
+Because `docker-compose.yml` mounts `./backend/assignment` into the container, any rubrics or rules you create in the web UI are saved to your local `backend/assignment` folder. The backend scaffolds the required subdirectories (`submissions/`, `rules/`, `templates/`) on first run.
+
+> **Linux:** you may need `sudo`, or add your user to the `docker` group first.
+
+---
+
+### Linux & macOS
+
+A `Makefile` at the repo root simplifies setup and execution. It auto-detects `uv`/`pip` and `bun`/`npm`.
+
+**1. Install all dependencies:**
 ```bash
 make install
 ```
 
-### 2. Running the Back-end
-
-The back-end requires a "data root" directory where it looks for files like `reference.bpmn`, `rubric.json`, and nested directories for submissions and rules. 
-
-If the directory doesn't exist, the backend will **automatically create it** and initialize the required folder structure (`submissions/`, `rules/`, `templates/`).
-
-You can run the back-end (which defaults to using `./assignment` as the data root):
-
+**2. Start the back-end** (data root defaults to `./assignment`, port 8000):
 ```bash
 make run-backend
+make run-backend DATA_DIR=my_class_data   # custom data directory
 ```
 
-To use a custom directory name:
-```bash
-make run-backend DATA_DIR=my_class_data
-```
+The back-end will automatically create the data root and initialize its folder structure if it doesn't exist.
 
-### 3. Running the Front-end
-
-In a new terminal, start the Vite development server:
-
+**3. Start the front-end** dev server at `http://localhost:5173` (in a new terminal):
 ```bash
 make run-frontend
 ```
 
-The UI will be available at `http://localhost:5173`.
-
-### Bundling for Production
-
-You can build the front-end and have the back-end serve it automatically (so both run on port 8000).
-
+**Production build** - compile the front-end and serve it from the back-end on port 8000:
 ```bash
 make build-frontend
 make run-backend
@@ -109,23 +107,34 @@ make run-backend
 
 ---
 
-## Docker Deployment
+### Windows
 
-You can run the entire stack using Docker Compose:
+The Makefile relies on Unix shell utilities and does not work natively on Windows. Use one of the options below.
 
-```bash
-make docker-up
-# or manually: docker compose up --build -d
-```
+#### Option A - WSL2 (recommended)
 
-Because `docker-compose.yml` mounts `./backend/assignment` to `/app/example` by default, any rubrics or rules you create in the web UI will be saved to your local `backend/assignment` folder on your host machine. The backend will automatically scaffold the directories inside it on the first run.
+Install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) with Ubuntu, then open a WSL terminal and follow the **Linux & macOS** instructions above.
 
-- **App URL**: `http://localhost:8000`
+#### Option B - PowerShell (manual)
 
-To stop the container:
+```powershell
+# --- Install ---
+cd backend
+pip install .                          # or: uv sync
+python -m spacy download en_core_web_md
+cd ..\frontend
+npm install                            # or: bun install
 
-```bash
-make docker-down
+# --- Run back-end (from backend\) ---
+python main.py ..\assignment           # replace 'assignment' with your data directory
+
+# --- Run front-end (from frontend\, in a new terminal) ---
+npm run dev                            # or: bun run dev
+
+# --- Production build (from frontend\) ---
+npm run build                          # or: bun run build
+Remove-Item -Recurse -Force ..\backend\static
+Copy-Item -Recurse dist ..\backend\static
 ```
 
 ---
@@ -158,8 +167,6 @@ Interactive API docs are available at `http://127.0.0.1:8000/docs` when the back
 | `DELETE` | `/api/behavioral-rule-groups/{id}` | Delete a rule group |
 | `POST` | `/api/behavioral-rule-groups/{id}/validate` | Validate a group against a BPMN model |
 
-Interactive API docs are available at `http://127.0.0.1:8000/docs` when the server is running.
-
 ---
 
 ## Adding a New Check
@@ -168,15 +175,18 @@ Interactive API docs are available at `http://127.0.0.1:8000/docs` when the serv
 2. Subclass `Check` and define the required `ClassVar` fields (`id`, `name`, `description`, `check_complexity`, `input_scheme`).
 3. Implement `analyze()` and `is_applicable()`.
 
-The check is auto-discovered and registered on the next server start — no wiring required.
+The check is auto-discovered and registered on the next server start with no additional wiring required.
 
 ---
 
 ## Linting & Formatting
 
-```bash
-ruff check .
-ruff format .
-```
+Run from `backend/`. Configured in `pyproject.toml` (rules: E, F, UP; double-quote style).
 
-Configured in `pyproject.toml` (rules: E, F, UP; double-quote style).
+```bash
+# Linux/macOS
+ruff check . && ruff format .
+
+# Windows (PowerShell)
+ruff check .; ruff format .
+```
