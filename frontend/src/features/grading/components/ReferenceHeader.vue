@@ -1,8 +1,8 @@
 <script lang="ts" setup>
-import {Save, RotateCcw, Loader2, Pencil, RefreshCw} from "lucide-vue-next";
-import GradingButton from "@/features/grading/components/GradingButton.vue";
+import {Save, RotateCcw, Loader2, RefreshCw} from "lucide-vue-next";
+import {computed} from "vue";
 
-defineProps<{
+const props = defineProps<{
   hasChanges: boolean;
   isSaving: boolean;
   isRegrading: boolean;
@@ -12,22 +12,31 @@ defineEmits<{
   save: [];
   clear: [];
 }>();
+
+const clearDisabled = computed(() => !props.hasChanges || props.isSaving);
+const saveDisabled = computed(() => !props.hasChanges || props.isSaving || props.isRegrading);
+const saveIcon = computed(() => props.isRegrading ? RefreshCw : props.isSaving ? Loader2 : Save);
+const saveTooltip = computed(() => props.isRegrading ? 'Re-grading submission…' : props.isSaving ? 'Saving…' : 'Save changes');
 </script>
 
 <template>
-  <header class="flex relative top-0 flex-row h-14 z-10 p-2 my-2 mx-4 justify-between items-center"
-          style="border-radius: 2px; border: solid 1px hsl(225, 10%, 75%); background-color: rgb(247, 247, 248);">
-    <div class="flex flex-row gap-x-2 items-center">
-      <Pencil class="w-4 h-4 text-gray-500"/>
-      <span class="font-semibold text-sm">Reference BPMN</span>
-    </div>
-    <div class="flex flex-row gap-x-2 items-center">
-      <GradingButton v-tooltip.bottom="'Discard changes'" :icon="RotateCcw" :disabled="!hasChanges || isSaving" @click="$emit('clear')"/>
-      <GradingButton
-          v-tooltip.left="isRegrading ? 'Re-grading submission…' : isSaving ? 'Saving…' : 'Save changes'"
-          :icon="isRegrading ? RefreshCw : isSaving ? Loader2 : Save"
-          :disabled="!hasChanges || isSaving || isRegrading"
-          @click="$emit('save')"/>
-    </div>
-  </header>
+  <div class="absolute z-10 flex flex-col justify-center items-center py-2 bottom-56 right-4 w-[48px]"
+       style="border-radius: 2px; border: solid 1px hsl(225, 10%, 75%); background-color: rgb(247, 247, 248);">
+    <RotateCcw
+        v-tooltip.left="'Discard changes'"
+        :size="32"
+        class="my-1 cursor-pointer"
+        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': clearDisabled }"
+        color="black"
+        @click="!clearDisabled && $emit('clear')"/>
+    <span class="w-8/12 bg-gray-400" style="height: 1px; margin: 5px;"/>
+    <component
+        :is="saveIcon"
+        v-tooltip.left="saveTooltip"
+        :size="32"
+        class="my-1 cursor-pointer"
+        :class="{ 'opacity-40 cursor-not-allowed pointer-events-none': saveDisabled }"
+        color="black"
+        @click="!saveDisabled && $emit('save')"/>
+  </div>
 </template>
