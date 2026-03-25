@@ -7,7 +7,6 @@ export interface BaseNodeData {
 
 export interface CheckNodeData extends BaseNodeData {
     label?: string
-    points?: number
     checkType?: 'element' | 'gateway'
 
     // Gateway specific

@@ -177,7 +177,6 @@ def find_semantic_duplicates(
             if j in processed:
                 continue
             score: float = similarity_matrix[i, j].item()
-            print(f"{labels[i]}\t{labels[j]}\t{score}")
             if score < threshold:
                 break  # remaining candidates are only worse
             processed.add(i)

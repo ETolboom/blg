@@ -5,7 +5,6 @@ import {computed, inject} from 'vue'
 import type {CheckNodeData, CheckNodeProps, RelationshipConnectorData} from '../../types/nodes.ts'
 import {getDefaultNodeData, NODE_TYPES} from '../../types/nodeRegistry.ts'
 import type {NodeValidationState} from '../../types/validation'
-import ScoreControl from './ScoreControl.vue'
 import NodeDeleteButton from './NodeDeleteButton.vue'
 
 const props = defineProps<CheckNodeProps>();
@@ -50,13 +49,6 @@ const validationTooltip = computed(() => {
   ];
 
   return lines.join('\n');
-});
-
-const score = computed<number>({
-  get: () => props.data.points ?? 0,
-  set: (value: number) => {
-    node.data.points = value
-  }
 });
 
 const checkType = computed(() => props.data.checkType ?? 'Element');
@@ -476,12 +468,6 @@ function removeBoundaryEventNode(): void {
             <span class="text-xs font-medium text-slate-800 select-none">{{ hasBoundaryEvent ? 'Yes' : 'No' }}</span>
           </label>
         </div>
-      </div>
-    </div>
-    <div class="flex flex-col gap-1.5">
-      <div class="mt-2 flex flex-col gap-1">
-        <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Score:</label>
-        <ScoreControl v-model="score"/>
       </div>
     </div>
     <template v-if="isGatewayCheck && gatewayOutcomes.length > 0">

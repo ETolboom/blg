@@ -37,7 +37,6 @@ export const NODE_REGISTRY = {
         displayName: 'Element Check',
         defaultData: (): CheckNodeData => ({
             label: 'Element Check',
-            points: 0.0,
             checkType: 'element',
             elementType: 'task',
         }),
@@ -62,7 +61,6 @@ export const NODE_REGISTRY = {
         displayName: 'Gateway Check',
         defaultData: (): CheckNodeData => ({
             label: 'Gateway Check',
-            points: 0.0,
             checkType: 'gateway',
             gatewayType: 'event',
             gatewayOutcomes: [],
@@ -231,12 +229,4 @@ export function isConnectionAllowed(
 export function getDefaultNodeData(type: NodeType): ReturnType<NodeMetadata['defaultData']> {
     const metadata = NODE_REGISTRY[type];
     return metadata.defaultData()
-}
-
-export function getNodeDisplayName(type: NodeType): string {
-    return NODE_REGISTRY[type].displayName
-}
-
-export function getNodesByCategory(category: keyof typeof NODE_CATEGORIES): readonly NodeType[] {
-    return NODE_CATEGORIES[category]
 }

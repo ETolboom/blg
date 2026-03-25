@@ -293,14 +293,18 @@ const getNodeValidationState = (nodeId: string): NodeValidationState | undefined
 // Normalize node data to ensure all required fields are present
 const normalizeNodes = (nodes: Node[]): Node[] => {
   return nodes.map(node => {
-    // Only normalize gateway check nodes
+    if (node.type === NODE_TYPES.ELEMENT_CHECK && node.data) {
+      const { points: _p, ...rest } = node.data;
+      return { ...node, data: rest };
+    }
     if (node.type === NODE_TYPES.GATEWAY_CHECK && node.data) {
+      const { points: _p, ...rest } = node.data;
       return {
         ...node,
         data: {
-          ...node.data,
-          isGatewayChecked: node.data.isGatewayChecked ?? false,
-          isOutcomeChecked: node.data.isOutcomeChecked ?? false,
+          ...rest,
+          isGatewayChecked: rest.isGatewayChecked ?? false,
+          isOutcomeChecked: rest.isOutcomeChecked ?? false,
         }
       };
     }

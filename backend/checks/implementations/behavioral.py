@@ -264,7 +264,6 @@ class TraversalContext:
 
         self.bpmn_pos = bpmn_elem
         self.match_scores.append(match_score)
-        self.accumulated_points += workflow_node.data.points or 0.0
 
         # Create detailed match record
         match_detail = MatchDetail(
@@ -584,13 +583,18 @@ class BehavioralRuleCheck(Check):
                 )
 
                 if connector.register_visit(branch_id):
-                    # Convergence complete, continue past connector
-                    logger.debug("Connector convergence complete, continuing...")
+                    # Convergence complete — stop here so the parent handler
+                    # (and/xor) can merge all branches before continuing past
+                    # the connector. Continuing here would traverse post-
+                    # convergence nodes inside the branch and then again after
+                    # merging, causing double-counting.
+                    logger.debug("Connector convergence complete, stopping branch")
                     context.workflow_pos = next_node
-                    continue
+                    return context
                 else:
                     # Need more branches, pause here
                     logger.debug("Connector needs more branches, pausing this branch")
+                    context.workflow_pos = next_node  # Mark as having reached connector
                     return context
 
             # Handle followedBy connectors
@@ -666,10 +670,9 @@ class BehavioralRuleCheck(Check):
                     context.match_details.append(match_detail)
                     context.match_scores.append(0.0)
 
-                    # Don't award points for unmatched elements
-                    # Continue to next node without raising exception
-                    context.workflow_pos = next_node
-                    continue
+                    # Stop traversal — a failed match invalidates this path.
+                    # match_detail is already recorded above for display purposes.
+                    return context
 
                 visit_count, bpmn_elem, match_score = bpmn_result
                 logger.debug(
@@ -680,6 +683,12 @@ class BehavioralRuleCheck(Check):
                 )
 
                 context.apply_match_result(bpmn_result, next_node)
+                context.workflow_pos = next_node
+                continue
+
+            elif next_node.type == "pointsNode":
+                context.accumulated_points += next_node.data.points or 0.0
+                logger.debug("Points node: +%s pts (total %.2f)", next_node.data.points, context.accumulated_points)
                 context.workflow_pos = next_node
                 continue
 
@@ -780,13 +789,25 @@ class BehavioralRuleCheck(Check):
                 result_ctx.accumulated_points,
             )
 
-        # Merge results with base points to avoid double-counting
-        logger.debug("Merging %d AND branch results", len(branch_results))
+        # Check whether every branch successfully reached the connector.
+        # A branch that failed a check returns early with workflow_pos NOT at
+        # the connector, so we can detect failure without exceptions.
+        all_reached = all(r.workflow_pos.id == connector.node_id for r in branch_results)
+
+        logger.debug("Merging %d AND branch results (all_reached=%s)", len(branch_results), all_reached)
         merged_ctx = self._merge_contexts(branch_results, base_points)
         merged_ctx.workflow_pos = self._get_node_by_id(connector.node_id, workflow)
+
+        if not all_reached:
+            # At least one branch failed — preserve match_details for display
+            # but grant no points and do not continue past the AND connector.
+            logger.debug("AND: branch(es) did not reach connector, aborting path")
+            merged_ctx.accumulated_points = base_points
+            return merged_ctx
+
         logger.debug("Merged points: %s", merged_ctx.accumulated_points)
 
-        # Continue past connector
+        # All branches reached the connector — continue past it
         logger.debug("Continuing past AND connector...")
         return self._traverse_from(merged_ctx, model, connectors, workflow)
 
@@ -821,15 +842,21 @@ class BehavioralRuleCheck(Check):
                 result_ctx = self._traverse_from(
                     branch_ctx, model, connectors, workflow
                 )
-                successful_results.append(result_ctx)
 
-                logger.debug(
-                    "XOR branch %d succeeded with confidence %.3f",
-                    i + 1,
-                    result_ctx.confidence,
-                )
+                # Only consider the branch successful if it reached the connector.
+                # A branch that fails a check returns early with workflow_pos
+                # pointing somewhere before the connector.
+                if result_ctx.workflow_pos.id == connector.node_id:
+                    successful_results.append(result_ctx)
+                    logger.debug(
+                        "XOR branch %d succeeded with confidence %.3f",
+                        i + 1,
+                        result_ctx.confidence,
+                    )
+                else:
+                    logger.debug("XOR branch %d did not reach connector (failed)", i + 1)
             except Exception as e:
-                # Branch failed, try next
+                # Branch failed due to nested exception (e.g. inner XOR with no branches)
                 logger.debug("XOR branch %d failed: %s", i + 1, e)
                 continue
 
