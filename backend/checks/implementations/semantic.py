@@ -20,7 +20,7 @@ class AtomicityCheck(Check):
     name: ClassVar[str] = "Label Atomicity"
     description: ClassVar[str] = "Check the task labels for atomicity"
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
-    threshold: ClassVar[float] = 0.85
+    threshold: ClassVar[float] = 0.90
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
     @classmethod
@@ -31,12 +31,7 @@ class AtomicityCheck(Check):
     def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
         tasks: list[ExtractedTask] = extract_all_tasks(self.model_xml)
 
-        problematic_elements: list[str] = []
-        for task in tasks:
-            single_action = check_single_action(task.name)
-            atomicity = atomicity_score(task.name)
-            if not (single_action or atomicity >= self.threshold):
-                problematic_elements.append(task.id)
+        problematic_elements: list[str] = [task.id for task in tasks if atomicity_score(task.name) <= self.threshold]
 
         return CheckResult(
             id=self.id,
@@ -92,7 +87,7 @@ class SemanticDuplicateTasks(Check):
         "Check the model for any duplicate tasks based on semantic matching"
     )
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
-    threshold: ClassVar[float] = 0.75
+    threshold: ClassVar[float] = 0.90
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
     def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
@@ -142,22 +137,27 @@ def _get_nlp() -> spacy.language.Language:
     return _nlp
 
 
-def check_single_action(label: str) -> bool:
-    doc = _get_nlp()(label)
-    verbs = [token for token in doc if token.pos_ == "VERB"]
-    return len(verbs) <= 1
-
-
 def atomicity_score(label: str) -> float:
+    """Returns how atomic a label is. Where 1 means it is fully atomic and describing a single action and 0 being not atomic at all."""
+    doc = _get_nlp()(label)
     words = label.split()
     conjunction_words = ["and", "or", "then", "after", "also"]
 
     penalties: float = 0.0
     penalties += len(words) * 0.1
-    penalties += sum(1 for word in words if word.lower() in conjunction_words) * 2
+    penalties += sum(1 for word in words if word.lower() in conjunction_words) * 2.0
+
+    # Penalize extra verbs beyond the first. Exclude participles used as
+    # adjective/relative-clause modifiers (e.g. "missing" in "receive missing
+    # ingredients") which spaCy sometimes mis-tags as VERB.
+    verbs = [t for t in doc if t.pos_ == "VERB" and t.dep_ not in ("amod", "acl")]
+    penalties += max(0, len(verbs) - 1) * 1.5
+
     penalties /= 10  # Scale back to 0-1
 
-    return max(0.0, 1.0 - penalties)
+    score =  max(0.0, 1.0 - penalties)
+    print(f"Atomicity score for {label}: {score}")
+    return score
 
 
 def find_semantic_duplicates(
