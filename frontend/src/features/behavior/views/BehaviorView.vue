@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import {markRaw, nextTick, onBeforeUnmount, onMounted, provide, ref, computed, watch} from 'vue'
+import {markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, provide, ref, computed, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import {useToast} from 'primevue'
 import Toast from 'primevue/toast'
@@ -13,6 +13,7 @@ import EndNode from '@/features/behavior/components/nodes/EndNode.vue'
 import NoteNode from '@/features/behavior/components/nodes/NoteNode.vue'
 import PointsNode from '@/features/behavior/components/nodes/PointsNode.vue'
 import useDragAndDrop from '@/features/behavior/composables/useDragAndDrop.ts'
+import {useFlowHistory} from '@/features/behavior/composables/useFlowHistory.ts'
 import {Background} from '@vue-flow/background'
 import {getDefaultNodeData, isConnectionAllowed, NODE_TYPES, type NodeType} from '@/features/behavior/types/nodeRegistry.ts'
 import {ApiError, behavioralRuleService} from "@/services"
@@ -37,6 +38,9 @@ const isSaving = ref<boolean>(false);
 const hasUnsavedChanges = ref<boolean>(false);
 const autoSaveTimeout = ref<ReturnType<typeof setTimeout> | null>(null);
 const isLoaded = ref<boolean>(false);
+const historyDebounce = ref<ReturnType<typeof setTimeout> | null>(null);
+
+const {isRestoring, canUndo, canRedo, pushState, undo, redo} = useFlowHistory(nodes, edges);
 
 const ruleId = computed(() => route.params.ruleId as string | undefined);
 const submissionFilename = computed(() => route.query.submission as string | undefined);
@@ -309,10 +313,19 @@ const normalizeNodes = (nodes: Node[]): Node[] => {
 // Track changes to nodes/edges using VueFlow's internal reactive state (not computed getters)
 // so that in-place node data mutations (label, type, score, etc.) are detected.
 watch([vfNodes, vfEdges], () => {
-  if (!isLoaded.value || isReadOnly.value) return;
+  if (!isLoaded.value || isReadOnly.value || isRestoring.value) return;
 
   hasUnsavedChanges.value = true;
 
+  // Debounced history snapshot — captures state after a burst of changes settles
+  if (historyDebounce.value) {
+    clearTimeout(historyDebounce.value);
+  }
+  historyDebounce.value = setTimeout(() => {
+    pushState();
+  }, 500);
+
+  // Auto-save debounce
   if (autoSaveTimeout.value) {
     clearTimeout(autoSaveTimeout.value);
   }
@@ -323,6 +336,28 @@ watch([vfNodes, vfEdges], () => {
     }
   }, 5000); // 5s debounce
 }, { deep: true });
+
+// Undo / Redo keyboard shortcuts
+const onKeyDown = (e: KeyboardEvent) => {
+  if (isReadOnly.value) return;
+  const modifier = e.metaKey || e.ctrlKey;
+  if (!modifier) return;
+
+  if (e.key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    undo();
+  } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+    e.preventDefault();
+    redo();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown);
+});
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown);
+});
 
 onMounted(async () => {
   // Load rule from route parameter
@@ -355,11 +390,17 @@ onMounted(async () => {
   // trigger a spurious save from the initial load.
   await nextTick();
   isLoaded.value = true;
+
+  // Push the initial loaded state so the first undo reverts to it
+  pushState();
 });
 
 onBeforeUnmount(() => {
   if (autoSaveTimeout.value) {
     clearTimeout(autoSaveTimeout.value);
+  }
+  if (historyDebounce.value) {
+    clearTimeout(historyDebounce.value);
   }
   validationResults.value = null;
   nodeValidationStates.value.clear();
