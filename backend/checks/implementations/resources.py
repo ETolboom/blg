@@ -114,27 +114,14 @@ class PoolLaneCheck(Check):
             reference=reference_pools,
             match_threshold=self.threshold,
         )
-        if len(pool_matches) != len(reference_pools):
-            # Add unmatched pool ids to problematic elements list and return early
-            matched_pool_ids = []
-            for submission_idx, best_reference_idx in pool_matches:
-                matched_pool_ids.append(pools[submission_idx][1])
 
-            missing_matches = set(
-                [pool[1] for pool in pools if pool[0] is not None]
-            ).difference(matched_pool_ids)
-
-            return CheckResult(
-                id=self.id,
-                name=self.name,
-                description=self.description,
-                check_complexity=self.check_complexity,
-                problematic_elements=list(missing_matches),
-                fulfilled=False,
-                inputs=inputs,
-            )
-
-        missing_ids = []
+        # Collect unmatched pool IDs as problematic, but continue to check lanes
+        # for pools that did match.
+        matched_pool_ids = {pools[submission_idx][1] for submission_idx, _ in pool_matches}
+        missing_ids = [
+            pool[1] for pool in pools if pool[0] is not None and pool[1] not in matched_pool_ids
+        ]
+        has_count_mismatch = len(pool_matches) != len(reference_pools)
         for submission_idx, reference_idx in pool_matches:
             submission_lane_labels = [
                 task.name for task in model.pools[submission_idx].lanes
@@ -147,9 +134,7 @@ class PoolLaneCheck(Check):
                 continue
 
             if len(submission_lane_labels) != len(reference_lane_labels):
-                for task in model.pools[submission_idx].lanes:
-                    missing_ids.append(task.id)
-                continue
+                has_count_mismatch = True
 
             lane_pairs = match_labels(
                 target=submission_lane_labels,
@@ -175,7 +160,7 @@ class PoolLaneCheck(Check):
             description=self.description,
             check_complexity=self.check_complexity,
             problematic_elements=missing_ids,
-            fulfilled=(len(missing_ids) == 0),
+            fulfilled=(len(missing_ids) == 0 and not has_count_mismatch),
             inputs=inputs,
         )
 
@@ -184,10 +169,10 @@ class PoolLaneCheck(Check):
             get_elements_by_type(self.model_xml, "process")
             get_elements_by_type(self.model_xml, "lane")
         except TypeError as e:
-            logger.debug("Check '%s' is not applicable: %s", self.name, e)
+            logger.info("Check '%s' is not applicable: %s", self.name, e)
             return False
         except ValueError as e:
-            logger.debug("Check '%s' is not applicable: %s", self.name, e)
+            logger.info("Check '%s' is not applicable: %s", self.name, e)
             return False
 
         return True
