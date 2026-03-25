@@ -12,7 +12,7 @@ class TaskCoverageCheck(Check):
     description: ClassVar[str] = (
         "Checks that the model covers all expected tasks from the reference model"
     )
-    check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
+    check_complexity: ClassVar[CheckComplexity] = CheckComplexity.CONFIGURABLE
     threshold: ClassVar[float] = 0.8
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
