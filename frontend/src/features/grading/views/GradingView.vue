@@ -144,7 +144,7 @@ const onTabChange = async (event: any) => {
   // Only swap the reference model when going to the Reference tab;
   // the Submission load is handled by GradingHeader via its isActive prop watcher.
   if (activeTab.value === '1') {
-     await toggleReference();
+     await Promise.all([toggleReference(), loadRubric()]);
   }
 };
 

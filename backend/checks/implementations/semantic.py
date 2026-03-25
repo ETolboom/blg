@@ -155,9 +155,7 @@ def atomicity_score(label: str) -> float:
 
     penalties /= 10  # Scale back to 0-1
 
-    score =  max(0.0, 1.0 - penalties)
-    print(f"Atomicity score for {label}: {score}")
-    return score
+    return max(0.0, 1.0 - penalties)
 
 
 def find_semantic_duplicates(
