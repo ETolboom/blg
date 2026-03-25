@@ -333,7 +333,6 @@ async def add_behavioral_group_to_rubric(
             RubricCriterion(
                 id=prefixed_group_id,
                 name=group.name,
-                description=group.description,
                 check_complexity=CheckComplexity.COMPLEX,
                 inputs=[
                     CheckFormInput(

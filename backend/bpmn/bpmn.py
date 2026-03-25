@@ -737,142 +737,111 @@ class Bpmn:
             "[find_next_gateway] Boundary events: %s", starting_element.boundary_events
         )
 
-        current_element = starting_element
-        visit_count = 0
-
-        # Iterate through the flow - for gateways, we can traverse through multiple outgoing edges
-        while visit_count < max_distance:
-            # 2. Check boundary events first (only from starting element)
-            if visit_count == 0 and current_element.boundary_events:
-                logger.debug(
-                    "[find_next_gateway] Element has %d boundary event(s), checking them first",
-                    len(current_element.boundary_events),
-                )
-                for boundary_event_id in current_element.boundary_events:
-                    # Find the boundary event element
-                    boundary_event = pool_for_element.get_element(boundary_event_id)
-                    if not boundary_event:
-                        logger.debug(
-                            "[find_next_gateway] Boundary event '%s' not found, skipping",
-                            boundary_event_id,
-                        )
-                        continue
-
+        # 2. Check boundary events first (only from starting element)
+        if starting_element.boundary_events:
+            logger.debug(
+                "[find_next_gateway] Element has %d boundary event(s), checking them first",
+                len(starting_element.boundary_events),
+            )
+            for boundary_event_id in starting_element.boundary_events:
+                boundary_event = pool_for_element.get_element(boundary_event_id)
+                if not boundary_event:
                     logger.debug(
-                        "[find_next_gateway] Checking boundary event '%s' (ID: %s)",
-                        boundary_event.label,
+                        "[find_next_gateway] Boundary event '%s' not found, skipping",
                         boundary_event_id,
                     )
-
-                    # Check if the boundary event itself is a gateway (unlikely but possible)
-                    is_gateway = "gateway" in boundary_event.name.lower()
-                    if is_gateway:
-                        if self._check_gateway_match(
-                            boundary_event,
-                            normalized_gateway_type,
-                            expected_outcomes,
-                            pool_for_element,
-                            gateway_label,
-                            outcome_labels,
-                            check_gateway_label,
-                            check_outcome_labels,
-                            match_threshold,
-                        ):
-                            logger.debug(
-                                "[find_next_gateway] MATCH on boundary event gateway!"
-                            )
-                            return 1, boundary_event, 1.0
-
-                    # Check the boundary event's outgoing paths for gateways
-                    if boundary_event.outgoing:
-                        for outgoing_flow_id in boundary_event.outgoing:
-                            flow = pool_for_element.get_flow(outgoing_flow_id)
-                            if not flow:
-                                continue
-
-                            next_element = pool_for_element.get_element(flow.target)
-                            if not next_element:
-                                continue
-
-                            logger.debug(
-                                "[find_next_gateway] Found element after boundary event: '%s' (type: %s)",
-                                next_element.label,
-                                next_element.name,
-                            )
-
-                            # Check if this is the gateway we're looking for
-                            is_gateway = "gateway" in next_element.name.lower()
-                            if is_gateway:
-                                if self._check_gateway_match(
-                                    next_element,
-                                    normalized_gateway_type,
-                                    expected_outcomes,
-                                    pool_for_element,
-                                    gateway_label,
-                                    outcome_labels,
-                                    check_gateway_label,
-                                    check_outcome_labels,
-                                    match_threshold,
-                                ):
-                                    logger.debug(
-                                        "[find_next_gateway] MATCH on gateway after boundary event!"
-                                    )
-                                    return 1, next_element, 1.0
+                    continue
 
                 logger.debug(
-                    "[find_next_gateway] No match found in boundary events, checking normal outgoing flows"
+                    "[find_next_gateway] Checking boundary event '%s' (ID: %s)",
+                    boundary_event.label,
+                    boundary_event_id,
                 )
 
-            # 3. Check all outgoing flows from current element
-            if not current_element.outgoing:
-                logger.debug(
-                    "[find_next_gateway] No outgoing edges from '%s', stopping",
-                    current_element.label,
-                )
-                return -1, None, 0.0
+                if "gateway" in boundary_event.name.lower():
+                    if self._check_gateway_match(
+                        boundary_event,
+                        normalized_gateway_type,
+                        expected_outcomes,
+                        pool_for_element,
+                        gateway_label,
+                        outcome_labels,
+                        check_gateway_label,
+                        check_outcome_labels,
+                        match_threshold,
+                    ):
+                        logger.debug("[find_next_gateway] MATCH on boundary event gateway!")
+                        return 1, boundary_event, 1.0
+
+                if boundary_event.outgoing:
+                    for outgoing_flow_id in boundary_event.outgoing:
+                        flow = pool_for_element.get_flow(outgoing_flow_id)
+                        if not flow:
+                            continue
+                        next_element = pool_for_element.get_element(flow.target)
+                        if not next_element:
+                            continue
+                        logger.debug(
+                            "[find_next_gateway] Found element after boundary event: '%s' (type: %s)",
+                            next_element.label,
+                            next_element.name,
+                        )
+                        if "gateway" in next_element.name.lower():
+                            if self._check_gateway_match(
+                                next_element,
+                                normalized_gateway_type,
+                                expected_outcomes,
+                                pool_for_element,
+                                gateway_label,
+                                outcome_labels,
+                                check_gateway_label,
+                                check_outcome_labels,
+                                match_threshold,
+                            ):
+                                logger.debug("[find_next_gateway] MATCH on gateway after boundary event!")
+                                return 1, next_element, 1.0
+
+            logger.debug("[find_next_gateway] No match found in boundary events, checking normal outgoing flows")
+
+        # 3. BFS traversal — explores all branches so the shortest path always wins.
+        # visited prevents cycles; only enqueuing elements within max_distance
+        # ensures the queue always terminates.
+        from collections import deque
+
+        # Queue entries: (element, distance_from_start)
+        queue: deque[tuple[object, int]] = deque([(starting_element, 0)])
+        visited: set[str] = {starting_element.id}
+
+        while queue:
+            current_element, distance = queue.popleft()
 
             logger.debug(
-                "[find_next_gateway] Element has %d outgoing edge(s)",
+                "[find_next_gateway] BFS visiting '%s' (distance=%d, outgoing=%d)",
+                current_element.label,
+                distance,
                 len(current_element.outgoing),
             )
 
-            # For each outgoing flow, check the target element
             for outgoing_flow_id in current_element.outgoing:
-                logger.debug(
-                    "[find_next_gateway] Checking flow ID: %s", outgoing_flow_id
-                )
-
                 flow = pool_for_element.get_flow(outgoing_flow_id)
                 if not flow:
-                    logger.debug(
-                        "[find_next_gateway] Flow '%s' not found, skipping",
-                        outgoing_flow_id,
-                    )
                     continue
-
-                logger.debug(
-                    "[find_next_gateway] Flow targets element ID: %s", flow.target
-                )
 
                 next_element = pool_for_element.get_element(flow.target)
-                if not next_element:
-                    logger.debug(
-                        "[find_next_gateway] Target element '%s' not found, skipping",
-                        flow.target,
-                    )
+                if not next_element or next_element.id in visited:
                     continue
 
+                visited.add(next_element.id)
+                next_distance = distance + 1
+
                 logger.debug(
-                    "[find_next_gateway] Found element '%s' (type: %s)",
+                    "[find_next_gateway] Found '%s' (type: %s, distance=%d)",
                     next_element.label,
                     next_element.name,
+                    next_distance,
                 )
 
-                # Check if this element is a gateway with matching criteria
-                is_gateway = "gateway" in next_element.name.lower()
-                logger.debug("[find_next_gateway] Is gateway: %s", is_gateway)
-
-                if is_gateway:
+                if "gateway" in next_element.name.lower():
                     if self._check_gateway_match(
                         next_element,
                         normalized_gateway_type,
@@ -884,54 +853,17 @@ class Bpmn:
                         check_outcome_labels,
                         match_threshold,
                     ):
-                        # Match found at visit_count + 1 (since we're looking at next elements)
                         logger.debug(
                             "[find_next_gateway] GATEWAY MATCH! Found at distance %d",
-                            visit_count + 1,
+                            next_distance,
                         )
-                        return visit_count + 1, next_element, 1.0
+                        return next_distance, next_element, 1.0
 
-            # If no match found in immediate neighbors, we need to traverse deeper
-            # Only continue if current element is a gateway (can have multiple outgoing edges)
-            # Tasks should not have multiple outgoing edges
-            is_current_gateway = "gateway" in current_element.name.lower()
-
-            if len(current_element.outgoing) > 0:
-                visit_count += 1
-
-                if visit_count >= max_distance:
-                    logger.debug(
-                        "[find_next_gateway] Reached max_distance (%d), stopping",
-                        max_distance,
-                    )
-                    return -1, None, 0.0
-
-                # Only continue traversal if we're at a gateway or have exactly 1 outgoing edge
-                if is_current_gateway or len(current_element.outgoing) == 1:
-                    # Take first outgoing flow to continue
-                    outgoing_flow_id = current_element.outgoing[0]
-                    flow = pool_for_element.get_flow(outgoing_flow_id)
-                    if not flow:
-                        return -1, None, 0.0
-
-                    next_element = pool_for_element.get_element(flow.target)
-                    if not next_element:
-                        return -1, None, 0.0
-
-                    current_element = next_element
-                    logger.debug(
-                        "[find_next_gateway] Moving to next element: '%s' (type: %s)",
-                        current_element.label,
-                        current_element.name,
-                    )
-                else:
-                    logger.debug(
-                        "[find_next_gateway] Current element is not a gateway and has %d outgoing edges, stopping",
-                        len(current_element.outgoing),
-                    )
-                    return -1, None, 0.0
-            else:
-                return -1, None, 0.0
+                # Only enqueue for further exploration if still within the distance limit.
+                # This is the hard termination boundary — nothing beyond max_distance
+                # ever enters the queue, so the loop is guaranteed to finish.
+                if next_distance < max_distance:
+                    queue.append((next_element, next_distance))
 
         return -1, None, 0.0
 

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ref, watch, computed } from "vue";
-import { Button, Dialog, InputText, Textarea, MultiSelect, RadioButton } from "primevue";
+import { Button, Dialog, InputText, MultiSelect, RadioButton } from "primevue";
 
 import type { BehavioralRule } from "@/features/behavior/types/template";
 import type { BehavioralRuleGroup, GroupCondition } from "@/features/behavior/types/group";
@@ -20,7 +20,6 @@ const emit = defineEmits<{
 
 const groupId = ref('');
 const name = ref('');
-const description = ref('');
 const condition = ref<GroupCondition>('XOR');
 const selectedRules = ref<BehavioralRule[]>([]);
 
@@ -38,7 +37,6 @@ watch(() => props.visible, (newValue) => {
   if (newValue) {
     groupId.value = '';
     name.value = '';
-    description.value = '';
     condition.value = 'XOR';
     selectedRules.value = [];
   }
@@ -59,7 +57,7 @@ watch(name, (newName) => {
 
 const handleSave = () => {
   // Validation
-  if (!groupId.value || !name.value || !description.value || !selectedRules.value.length) {
+  if (!groupId.value || !name.value || !selectedRules.value.length) {
     return;
   }
 
@@ -83,7 +81,6 @@ const handleSave = () => {
   const group: BehavioralRuleGroup = {
     group_id: groupId.value,
     name: name.value,
-    description: description.value,
     condition: condition.value,
     rule_ids: selectedRules.value.map(t => t.id),
     rule_results: []
@@ -114,17 +111,6 @@ const handleClose = () => {
           v-model="name"
           class="w-full"
           placeholder="e.g., Part 1 - Residency Check"
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <label class="font-semibold" for="group-description">Description</label>
-        <Textarea
-          id="group-description"
-          v-model="description"
-          rows="3"
-          class="w-full"
-          placeholder="Describe what this group validates"
         />
       </div>
 

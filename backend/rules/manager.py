@@ -96,7 +96,6 @@ class BehavioralRuleGroup(BaseModel):
 
     group_id: str  # Unique identifier (e.g., "part_1_group")
     name: str  # Display name in rubric
-    description: str  # Criterion description
     maxPoints: float | None = (
         None  # Maximum points for the criterion (auto-calculated if not provided)
     )
@@ -261,7 +260,6 @@ class BehavioralRuleManager:
                         {
                             "group_id": data.get("group_id"),
                             "name": data.get("name"),
-                            "description": data.get("description"),
                             "maxPoints": data.get("maxPoints"),
                             "condition": data.get("condition"),
                             "rule_ids": data.get("rule_ids", []),

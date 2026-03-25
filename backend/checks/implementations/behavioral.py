@@ -205,7 +205,6 @@ class GroupEvaluationResult(BaseModel):
 
     group_id: str
     group_name: str
-    group_description: str
     condition: str  # "XOR" or "AND"
 
     # Individual rule results
@@ -761,8 +760,14 @@ class BehavioralRuleCheck(Check):
 
             # Clone context for this branch
             branch_ctx = context.clone()
-            branch_ctx.workflow_pos = branch_start
             branch_ctx.bpmn_pos = bpmn_state  # Reset to divergence point
+
+            # If the branch starts with a followedBy connector, apply its distance
+            # constraints immediately — _traverse_from starts from workflow.next(pos)
+            # so the connector node itself would otherwise be skipped.
+            if getattr(branch_start.data, "relationshipType", None) == "followedBy":
+                branch_ctx.update_distance_constraints(branch_start)
+            branch_ctx.workflow_pos = branch_start
 
             # Traverse this branch recursively
             result_ctx = self._traverse_from(branch_ctx, model, connectors, workflow)
@@ -805,8 +810,12 @@ class BehavioralRuleCheck(Check):
             try:
                 # Clone context for this branch
                 branch_ctx = context.clone()
-                branch_ctx.workflow_pos = branch_start
                 branch_ctx.bpmn_pos = bpmn_state  # Reset to divergence
+
+                # Same followedBy handling as AND branches
+                if getattr(branch_start.data, "relationshipType", None) == "followedBy":
+                    branch_ctx.update_distance_constraints(branch_start)
+                branch_ctx.workflow_pos = branch_start
 
                 # Traverse this branch recursively
                 result_ctx = self._traverse_from(
@@ -1041,7 +1050,6 @@ class BehavioralGroupEvaluator:
                 return GroupEvaluationResult(
                     group_id=group.group_id,
                     group_name=group.name,
-                    group_description=group.description,
                     condition=group.condition.value,
                     rule_results=rule_results,
                     earned_points=best.earned_points,
@@ -1056,7 +1064,6 @@ class BehavioralGroupEvaluator:
                 return GroupEvaluationResult(
                     group_id=group.group_id,
                     group_name=group.name,
-                    group_description=group.description,
                     condition=group.condition.value,
                     rule_results=rule_results,
                     earned_points=0.0,
@@ -1080,7 +1087,6 @@ class BehavioralGroupEvaluator:
                 return GroupEvaluationResult(
                     group_id=group.group_id,
                     group_name=group.name,
-                    group_description=group.description,
                     condition=group.condition.value,
                     rule_results=rule_results,
                     earned_points=best.earned_points,
@@ -1095,7 +1101,6 @@ class BehavioralGroupEvaluator:
                 return GroupEvaluationResult(
                     group_id=group.group_id,
                     group_name=group.name,
-                    group_description=group.description,
                     condition=group.condition.value,
                     rule_results=rule_results,
                     earned_points=0.0,

@@ -4,7 +4,6 @@ export type GroupCondition = "XOR" | "AND";
 export interface BehavioralRuleGroup {
     group_id: string;
     name: string;
-    description: string;
     maxPoints?: number;
     condition: GroupCondition;
     rule_ids: string[];
@@ -48,7 +47,6 @@ export interface RuleEvaluationResult {
 export interface GroupEvaluationResult {
     group_id: string;
     group_name: string;
-    group_description: string;
     condition: GroupCondition;
 
     // Individual template results

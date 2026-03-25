@@ -124,7 +124,6 @@ const bestRuleName = computed(() => {
           <span v-if="isXor" class="bg-blue-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">XOR</span>
           <span v-if="isAnd" class="bg-green-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">AND</span>
         </div>
-        <p class="text-xs text-gray-500 mt-1">{{ criterion.description }}</p>
       </div>
       <div class="flex flex-col items-end">
         <span 

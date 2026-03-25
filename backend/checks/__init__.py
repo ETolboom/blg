@@ -94,7 +94,7 @@ class CheckResult(BaseModel):
     id: str
     name: str
     check_complexity: CheckComplexity
-    description: str
+    description: str = ""
     fulfilled: bool
     confidence: float = 1.0
     problematic_elements: list[str] = []

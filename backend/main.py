@@ -130,4 +130,5 @@ if __name__ == "__main__":
     # Set base_path before lifespan runs
     app.state.base_path = base_path
 
+    # logging.basicConfig(level=logging.DEBUG)
     uvicorn.run(app, host="0.0.0.0", port=8000)
