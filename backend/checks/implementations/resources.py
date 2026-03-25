@@ -45,33 +45,32 @@ class PoolLaneCheck(Check):
             inputs = []
             model = get_bpmn(self.model_xml)
 
-            for pool in model.pools:
-                inputs.append(
-                    CheckFormInput(
-                        input_label="Pool(s) and Lane(s)",
-                        input_type=CheckInputType.KEY_VALUE,
-                        multiple=True,
-                        # In case you have a pool with a single lane then technically a
-                        # lane exists that has no name hence the type check.
-                        data=CheckKeyValueType(
-                            key_label=self.key_label,
-                            value_label=self.value_label,
-                            pairs=[
-                                CheckKeyValuePair(
-                                    key=pool.name,
-                                    value=[
-                                        lane.name
-                                        for lane in pool.lanes
-                                        if lane.name is not None
-                                    ],
-                                )
-                            ],
-                        ),
-                    )
-                )
-
-            if len(inputs) == 0:
+            if len(model.pools) == 0:
                 raise Exception("No pools found")
+
+            inputs.append(
+                CheckFormInput(
+                    input_label="Pool(s) and Lane(s)",
+                    input_type=CheckInputType.KEY_VALUE,
+                    multiple=True,
+                    data=CheckKeyValueType(
+                        key_label=self.key_label,
+                        value_label=self.value_label,
+                        # In case a pool has a single lane, that lane has no name.
+                        pairs=[
+                            CheckKeyValuePair(
+                                key=pool.name,
+                                value=[
+                                    lane.name
+                                    for lane in pool.lanes
+                                    if lane.name is not None
+                                ],
+                            )
+                            for pool in model.pools
+                        ],
+                    ),
+                )
+            )
 
             return CheckResult(
                 id=self.id,
@@ -86,8 +85,9 @@ class PoolLaneCheck(Check):
         # Parse model_xml into Bpmn
         model = get_bpmn(self.model_xml)
 
-        # Extract pools
-        pools = [(pool.name, pool.id) for pool in model.pools]
+        pools = [
+            (pool.name, pool.participant_id or pool.id) for pool in model.pools
+        ]
         submission_pools = [pool[0] for pool in pools if pool[0] is not None]
 
         reference_pools: list[str] = []
@@ -124,11 +124,6 @@ class PoolLaneCheck(Check):
                 [pool[1] for pool in pools if pool[0] is not None]
             ).difference(matched_pool_ids)
 
-            # Also add lanes clarity sake
-            for pool in model.pools:
-                for lane in pool.lanes:
-                    missing_matches.add(lane.id)
-
             return CheckResult(
                 id=self.id,
                 name=self.name,
@@ -145,8 +140,11 @@ class PoolLaneCheck(Check):
                 task.name for task in model.pools[submission_idx].lanes
             ]
 
-            # TODO: Unsafe access
             reference_lane_labels: list[str] = inputs[0].data.pairs[reference_idx].value
+
+            if not reference_lane_labels:
+                # Pool with no expected lanes (e.g. closed/black-box pool) — nothing to check.
+                continue
 
             if len(submission_lane_labels) != len(reference_lane_labels):
                 for task in model.pools[submission_idx].lanes:

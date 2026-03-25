@@ -86,11 +86,15 @@ class LaneElement:
 class Pool:
     """The main container for BPMN elements."""
 
-    # Id is the unique identifier for each Pool.
+    # Id is the unique identifier for each Pool (the process element id).
     id: str
 
     # Name is the name given to each Pool.
     name: str
+
+    # ParticipantId is the id of the participant element that references this pool's process.
+    # This is the visual element in the diagram and should be used when highlighting the pool.
+    participant_id: str = ""
 
     # Elements contains all elements within a Pool regardless of lane.
     elements: list[PoolElement] = field(default_factory=list)

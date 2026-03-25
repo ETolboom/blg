@@ -143,29 +143,29 @@ Copy-Item -Recurse dist ..\backend\static
 
 Interactive API docs are available at `http://127.0.0.1:8000/docs` when the back-end is running.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/rubric` | Fetch the current rubric |
-| `POST` | `/api/rubric` | Create a rubric via onboarding payload |
-| `DELETE` | `/api/rubric/criteria/{id}` | Remove a rubric criterion |
-| `GET` | `/api/submissions` | List all student submissions |
-| `POST` | `/api/submissions` | Upload `.bpmn` files |
-| `GET` | `/api/submissions/{filename}` | Download raw BPMN XML |
-| `GET` | `/api/submissions/export` | Export a single result as `.xlsx` |
-| `GET` | `/api/submissions/export/all` | Export all results as `.xlsx` |
-| `GET` | `/api/checks` | List all registered checks |
-| `POST` | `/api/checks/analyze` | Analyze a submission against the rubric |
-| `POST` | `/api/checks/analyze/all` | List applicable checks for a given model |
-| `GET` | `/api/behavioral-rules` | List behavioral rules |
-| `POST` | `/api/behavioral-rules` | Create a rule |
-| `PUT` | `/api/behavioral-rules/{id}` | Update a rule |
-| `DELETE` | `/api/behavioral-rules/{id}` | Delete a rule |
-| `POST` | `/api/behavioral-rules/{id}/validate` | Validate a rule against a BPMN model |
-| `GET` | `/api/behavioral-rule-groups` | List rule groups |
-| `POST` | `/api/behavioral-rule-groups` | Create a rule group |
-| `PUT` | `/api/behavioral-rule-groups/{id}` | Update a rule group |
-| `DELETE` | `/api/behavioral-rule-groups/{id}` | Delete a rule group |
-| `POST` | `/api/behavioral-rule-groups/{id}/validate` | Validate a group against a BPMN model |
+| Method   | Path                                        | Description                              |
+|----------|---------------------------------------------|------------------------------------------|
+| `GET`    | `/api/rubric`                               | Fetch the current rubric                 |
+| `POST`   | `/api/rubric`                               | Create a rubric via onboarding payload   |
+| `DELETE` | `/api/rubric/criteria/{id}`                 | Remove a rubric criterion                |
+| `GET`    | `/api/submissions`                          | List all student submissions             |
+| `POST`   | `/api/submissions`                          | Upload `.bpmn` files                     |
+| `GET`    | `/api/submissions/{filename}`               | Download raw BPMN XML                    |
+| `GET`    | `/api/submissions/export`                   | Export a single result as `.xlsx`        |
+| `GET`    | `/api/submissions/export/all`               | Export all results as `.xlsx`            |
+| `GET`    | `/api/checks`                               | List all registered checks               |
+| `POST`   | `/api/checks/analyze`                       | Analyze a submission against the rubric  |
+| `POST`   | `/api/checks/analyze/all`                   | List applicable checks for a given model |
+| `GET`    | `/api/behavioral-rules`                     | List behavioral rules                    |
+| `POST`   | `/api/behavioral-rules`                     | Create a rule                            |
+| `PUT`    | `/api/behavioral-rules/{id}`                | Update a rule                            |
+| `DELETE` | `/api/behavioral-rules/{id}`                | Delete a rule                            |
+| `POST`   | `/api/behavioral-rules/{id}/validate`       | Validate a rule against a BPMN model     |
+| `GET`    | `/api/behavioral-rule-groups`               | List rule groups                         |
+| `POST`   | `/api/behavioral-rule-groups`               | Create a rule group                      |
+| `PUT`    | `/api/behavioral-rule-groups/{id}`          | Update a rule group                      |
+| `DELETE` | `/api/behavioral-rule-groups/{id}`          | Delete a rule group                      |
+| `POST`   | `/api/behavioral-rule-groups/{id}/validate` | Validate a group against a BPMN model    |
 
 ---
 

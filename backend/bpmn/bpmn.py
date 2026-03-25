@@ -36,12 +36,34 @@ class Bpmn:
 
         namespace = {"bpmn": "http://www.omg.org/spec/BPMN/20100524/MODEL"}
 
-        pools = root.findall(".//bpmn:process", namespace)
+        # Build a map of process id -> process element for quick lookup
+        processes_by_id: dict[str, ElementTree.Element] = {
+            p.get("id"): p
+            for p in root.findall(".//bpmn:process", namespace)
+            if p.get("id")
+        }
 
-        for pool in pools:
-            parsed_pool = Pool(name=pool.get("name") or "", id=pool.get("id") or "")
+        # Discover pools via participants (handles both open and closed/black-box pools).
+        # Closed pools have no processRef and therefore no lanes or internal elements.
+        participants = root.findall(".//bpmn:participant", namespace)
+
+        for participant in participants:
+            participant_id = participant.get("id") or ""
+            process_ref = participant.get("processRef") or ""
+            parsed_pool = Pool(
+                name=participant.get("name") or "",
+                id=process_ref,
+                participant_id=participant_id,
+            )
+
+            process_element = processes_by_id.get(process_ref)
+            if process_element is None:
+                # Closed pool
+                self.pools.append(parsed_pool)
+                continue
+
             pool_elements: list[PoolElement] = []
-            for child in pool:
+            for child in process_element:
                 element_type = child.tag.split("}")[-1]
 
                 element = PoolElement(
@@ -90,7 +112,7 @@ class Bpmn:
             for element in pool_elements:
                 attached_to_ref = element.id
                 # Find all boundary events attached to this element
-                for child in pool:
+                for child in process_element:
                     element_type = child.tag.split("}")[-1]
                     if child.get("attachedToRef") == attached_to_ref:
                         # This is a boundary event attached to the current element
