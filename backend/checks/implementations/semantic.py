@@ -2,7 +2,6 @@ from collections import defaultdict
 from typing import ClassVar
 
 import spacy
-import torch
 from thefuzz import fuzz
 
 from checks import (
@@ -63,9 +62,7 @@ class ExactDuplicateTasks(Check):
 
         duplicates = find_fuzzy_duplicates(tasks, threshold=self.threshold)
 
-        problematic_elements: list[str] = [
-            element.id for pair in duplicates for element in pair
-        ]
+        problematic_elements: list[str] = [t.id for t in duplicates]
 
         return CheckResult(
             id=self.id,
@@ -95,13 +92,9 @@ class SemanticDuplicateTasks(Check):
         if len(tasks) == 0:
             raise Exception("Cannot identify exact duplicates: no tasks found")
 
-        duplicates: list[tuple[ExtractedTask, ExtractedTask]] = (
-            find_semantic_duplicates(tasks, threshold=self.threshold)
-        )
+        duplicates: list[ExtractedTask] = find_semantic_duplicates(tasks, threshold=self.threshold)
 
-        problematic_elements: list[str] = [
-            element.id for pair in duplicates for element in pair
-        ]
+        problematic_elements: list[str] = [t.id for t in duplicates]
 
         return CheckResult(
             id=self.id,
@@ -160,54 +153,34 @@ def atomicity_score(label: str) -> float:
 
 def find_semantic_duplicates(
     extracted_tasks: list[ExtractedTask], threshold: float
-) -> list[tuple[ExtractedTask, ExtractedTask]]:
+) -> list[ExtractedTask]:
     labels: list[str] = [t.name for t in extracted_tasks]
     similarity_matrix = create_similarity_matrix(labels, labels, self_similarity=True)
 
-    ranked_indices = torch.argsort(similarity_matrix, dim=1, descending=True)
+    n = len(labels)
+    duplicate_indices: set[int] = set()
 
-    processed: set[int] = set()
-    pairs: list[tuple[ExtractedTask, ExtractedTask]] = []
-
-    for i in range(len(labels)):
-        if i in processed:
-            continue
-
-        for j in ranked_indices[i].tolist():
-            if j in processed:
-                continue
+    for i in range(n):
+        for j in range(i + 1, n):
             score: float = similarity_matrix[i, j].item()
-            if score < threshold:
-                break  # remaining candidates are only worse
-            processed.add(i)
-            processed.add(j)
-            pairs.append((extracted_tasks[i], extracted_tasks[j]))
-            break
+            if score >= threshold:
+                duplicate_indices.add(i)
+                duplicate_indices.add(j)
 
-    return pairs
+    return [extracted_tasks[i] for i in sorted(duplicate_indices)]
 
 
 def find_fuzzy_duplicates(
     tasks: list[ExtractedTask], threshold: float
-) -> list[tuple[ExtractedTask, ExtractedTask]]:
-    groups: list[tuple[ExtractedTask, ExtractedTask]] = []
-    processed = set()
-    threshold *= 100  # Thefuzz produces values between 0-100
+) -> list[ExtractedTask]:
+    duplicate_indices: set[int] = set()
+    threshold_scaled = threshold * 100  # Thefuzz produces values between 0-100
 
     for i, current_task in enumerate(tasks):
-        if i in processed:
-            continue
-
-        processed.add(i)
-
         for j, other_task in enumerate(tasks[i + 1 :], i + 1):
-            if j in processed:
-                continue
-
-            # Similarity score between 0-100
             similarity: int = fuzz.ratio(current_task.name, other_task.name)
-            if similarity >= threshold:
-                groups.append((current_task, other_task))
-                processed.add(j)
+            if similarity >= threshold_scaled:
+                duplicate_indices.add(i)
+                duplicate_indices.add(j)
 
-    return groups
+    return [tasks[i] for i in sorted(duplicate_indices)]
