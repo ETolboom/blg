@@ -22,7 +22,7 @@ import type {BehavioralRule} from '@/features/behavior/types/template'
 const route = useRoute();
 const toast = useToast();
 
-const {onConnect, findNode, addEdges, getEdges, getNodes, addNodes, removeEdges} = useVueFlow();
+const {onConnect, findNode, addEdges, getEdges, getNodes, addNodes, removeEdges, nodes: vfNodes, edges: vfEdges} = useVueFlow();
 const {onDragOver, onDrop, onDragLeave, isDragOver} = useDragAndDrop();
 
 const nodes = ref<Node[]>([]);
@@ -36,6 +36,7 @@ const isValidating = ref<boolean>(false);
 const isSaving = ref<boolean>(false);
 const hasUnsavedChanges = ref<boolean>(false);
 const autoSaveTimeout = ref<ReturnType<typeof setTimeout> | null>(null);
+const isLoaded = ref<boolean>(false);
 
 const ruleId = computed(() => route.params.ruleId as string | undefined);
 const submissionFilename = computed(() => route.query.submission as string | undefined);
@@ -75,14 +76,22 @@ onConnect((connection: Connection) => {
     return true;
   }
 
-  // Invalid connection. Need to insert a "Followed By" connector in between
+  // Invalid connection. Need to insert a "Followed By" connector in between.
+  // Shift the target node to the right to make room for the connector.
+  const gap = 200;
+  const midX = (sourceNode.position.x + targetNode.position.x) / 2;
+  const midY = (sourceNode.position.y + targetNode.position.y) / 2;
+
+  // Move the target node further right so it doesn't overlap with the connector
+  targetNode.position = {
+    ...targetNode.position,
+    x: Math.max(targetNode.position.x, midX + gap),
+  };
+
   const followedByNode: Node = {
     id: `followedBy-${Date.now()}`,
     type: NODE_TYPES.FOLLOWED_BY,
-    position: {
-      x: (sourceNode.position.x + targetNode.position.x) / 2,
-      y: (sourceNode.position.y + targetNode.position.y),
-    },
+    position: { x: midX, y: midY },
     data: getDefaultNodeData(NODE_TYPES.FOLLOWED_BY),
   };
 
@@ -297,6 +306,24 @@ const normalizeNodes = (nodes: Node[]): Node[] => {
 
 
 
+// Track changes to nodes/edges using VueFlow's internal reactive state (not computed getters)
+// so that in-place node data mutations (label, type, score, etc.) are detected.
+watch([vfNodes, vfEdges], () => {
+  if (!isLoaded.value || isReadOnly.value) return;
+
+  hasUnsavedChanges.value = true;
+
+  if (autoSaveTimeout.value) {
+    clearTimeout(autoSaveTimeout.value);
+  }
+
+  autoSaveTimeout.value = setTimeout(() => {
+    if (hasUnsavedChanges.value && currentRule.value) {
+      saveFlow(false);
+    }
+  }, 5000); // 5s debounce
+}, { deep: true });
+
 onMounted(async () => {
   // Load rule from route parameter
   if (ruleId.value) {
@@ -317,28 +344,17 @@ onMounted(async () => {
       // Fall back to empty editor
       currentRule.value = null;
     }
-    
+
     // Automatically run validation if in read-only mode
     if (isReadOnly.value && currentRule.value) {
       await runFlow();
     }
   }
 
-  // Track changes to nodes/edges (using getNodes/getEdges to track VueFlow's internal state)
-  watch([() => getNodes.value, () => getEdges.value], () => {
-    hasUnsavedChanges.value = true;
-    
-    // Auto-save logic
-    if (autoSaveTimeout.value) {
-      clearTimeout(autoSaveTimeout.value);
-    }
-    
-    autoSaveTimeout.value = setTimeout(() => {
-      if (hasUnsavedChanges.value && currentRule.value) {
-        saveFlow(false);
-      }
-    }, 5000); // 5s debounce
-  }, { deep: true });
+  // Mark as loaded after initial data is synced, so the watcher doesn't
+  // trigger a spurious save from the initial load.
+  await nextTick();
+  isLoaded.value = true;
 });
 
 onBeforeUnmount(() => {
