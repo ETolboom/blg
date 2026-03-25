@@ -34,7 +34,6 @@ const editing = ref(false);
 const draft = ref(props.points);
 
 function startEdit() {
-  if (!props.isEditable) return;
   editing.value = true;
   draft.value = props.points;
   setTimeout(() => (document.getElementById('points-input') as HTMLInputElement)?.select(), 0);
@@ -93,7 +92,21 @@ function finishEdit() {
              @click.stop="$emit('toggle')">
           <XIcon :size="36"/>
         </div>
-        <p class="bg-gray-50 text-gray-700 border border-gray-200 w-full h-8 flex justify-center items-center font-semibold rounded-b-sm">
+        <input
+            v-if="editing"
+            id="points-input"
+            v-model.number="draft"
+            class="bg-gray-50 text-gray-700 border border-gray-200 w-16 h-8 flex justify-center items-center font-semibold rounded-b-sm text-center outline-none"
+            step="0.1"
+            type="number"
+            @blur="finishEdit"
+            @keyup.enter="finishEdit"
+        />
+        <p
+            v-else
+            class="bg-gray-50 text-gray-700 border border-gray-200 w-full h-8 flex justify-center items-center font-semibold rounded-b-sm cursor-pointer select-none"
+            @dblclick="startEdit"
+        >
           {{ props.points }}</p>
       </template>
     </div>

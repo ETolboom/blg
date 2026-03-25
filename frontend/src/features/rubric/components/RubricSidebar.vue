@@ -100,9 +100,8 @@ const openMenu = () => {
                       {{ getCategoryItemCount(category) }}
                     </span>
                   </div>
-                  <div v-if="category === CheckComplexity.COMPLEX" class="flex gap-2">
+                  <div v-if="category === CheckComplexity.COMPLEX && !submissionFilename" class="flex gap-2">
                     <Button
-                        v-if="isEditable"
                         class="!bg-transparent !border-0 !shadow-none !text-blue-500 hover:!text-blue-600 hover:-translate-y-0.5 transition-all duration-200"
                         icon="pi pi-plus"
                         label="Rule"
@@ -111,7 +110,6 @@ const openMenu = () => {
                         @click.stop="emit('openBehavioralAddDialog')"
                     />
                     <Button
-                        v-if="isEditable"
                         class="!bg-transparent !border-0 !shadow-none !text-blue-500 hover:!text-blue-600 hover:-translate-y-0.5 transition-all duration-200 disabled:!text-gray-400 disabled:hover:!text-gray-400 disabled:hover:!translate-y-0 disabled:cursor-not-allowed"
                         icon="pi pi-plus"
                         label="Group"
@@ -122,7 +120,7 @@ const openMenu = () => {
                     />
                   </div>
                   <Button
-                      v-else-if="isEditable"
+                      v-else-if="category !== CheckComplexity.COMPLEX && !submissionFilename"
                       class="!bg-transparent !border-0 !shadow-none !text-blue-500 hover:!text-blue-600 hover:-translate-y-0.5 transition-all duration-200"
                       icon="pi pi-plus"
                       label="Add"
@@ -151,7 +149,7 @@ const openMenu = () => {
                         :class="currentHighlightIndex === criteria.indexOf(item) ? ' border-2 border-blue-500 shadow-md' : ' border border-gray-200'"
                         :custom_score_set="item.score != null"
                         :description="item.description"
-                        :points="item.score ?? item.default_points"
+                        :points="item.fulfilled ? (item.score ?? item.default_points) : 0"
                         :state="item.fulfilled"
                         :title="item.name"
                         :criterion="item"

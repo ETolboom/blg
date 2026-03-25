@@ -48,7 +48,7 @@ const calculateScore = (): void => {
   let correct = 0;
   props.criteria.forEach((item) => {
     total += item['default_points'];
-    correct += item.fulfilled ? item['default_points'] : 0;
+    correct += item.fulfilled ? (item.score ?? item['default_points']) : 0;
   });
 
   totalScore.value = total;
@@ -61,6 +61,7 @@ const toggleState = (index: number): void => {
   if (!criterion) return;
 
   criterion.fulfilled = !criterion.fulfilled;
+  if (!criterion.fulfilled) criterion.score = null;
   emit('saveSubmission', props.criteria);
   calculateScore();
 };

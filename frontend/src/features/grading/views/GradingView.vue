@@ -342,7 +342,7 @@ const onOnboarded = async () => {
       <RubricLayout v-if="isModelerReady && typeof modeler !== 'undefined' && rubric"
                     :criteria="rubric.criteria"
                     :modeler="modeler!"
-                    :is-editable="activeTab === '1' || activeTab === '2'"
+                    :is-editable="activeTab !== '0'"
                     :submission-name="activeTab === '0' ? submission_name : undefined"
                     @saveSubmission="saveSubmission"
                     @updateRubric="updateRubric"/>
