@@ -87,7 +87,7 @@ class SemanticDuplicateTasks(Check):
         "Check the model for any duplicate tasks based on semantic matching"
     )
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
-    threshold: ClassVar[float] = 0.90
+    threshold: ClassVar[float] = 0.80
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
     def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
@@ -177,6 +177,7 @@ def find_semantic_duplicates(
             if j in processed:
                 continue
             score: float = similarity_matrix[i, j].item()
+            print(f"{labels[i]}\t{labels[j]}\t{score}")
             if score < threshold:
                 break  # remaining candidates are only worse
             processed.add(i)
