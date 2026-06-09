@@ -1,6 +1,10 @@
 import { apiGet, apiPatch, handleResponse } from './api';
 import { Criterion } from "@/features/rubric/types/rubric";
 
+// Sentinel "filename" that refers to the reference model rather than a submission.
+// Must match the backend REFERENCE_FILENAME (services/submissions.py).
+export const REFERENCE_FILENAME = "Reference";
+
 export interface Submission {
     filename: string;
     name: string;

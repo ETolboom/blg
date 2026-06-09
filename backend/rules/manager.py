@@ -1,6 +1,5 @@
 import json
 import logging
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
@@ -102,15 +101,6 @@ class BehavioralRuleGroup(BaseModel):
     condition: GroupCondition  # "XOR" or "AND"
     rule_ids: list[str]  # List of behavioral rule IDs (min 1)
 
-    # Evaluation results (embedded after evaluation)
-    last_evaluation: str | None = None  # ISO 8601 timestamp of last evaluation
-    earned_points: float | None = None  # MAX points from rules
-    best_rule_id: str | None = None  # Rule with best points
-    fulfilled: bool | None = None  # Whether group requirements met
-    confidence: float | None = None  # Overall confidence score
-    problematic_elements: list[str] | None = None  # BPMN elements with issues
-    rule_results: list[RuleEvaluationSummary] | None = None  # Individual rule points
-
     @field_validator("rule_ids")
     @classmethod
     def validate_rule_ids(cls, v):
@@ -122,10 +112,12 @@ class BehavioralRuleGroup(BaseModel):
 class BehavioralRuleManager:
     """Manages behavioral rules on disk"""
 
-    def __init__(self, rules_dir: str = "assignment/rules"):
+    def __init__(self, rules_dir: str, templates_dir: str):
+        # rules_dir is per-project; templates_dir is the global, shared library.
         self.rules_dir = Path(rules_dir)
         self.rules_dir.mkdir(parents=True, exist_ok=True)
-        self.templates_dir = self.rules_dir.parent / "templates"
+        self.templates_dir = Path(templates_dir)
+        self.templates_dir.mkdir(parents=True, exist_ok=True)
 
     def get_template(self, rule_id: str) -> BehavioralRule | None:
         """Load a read-only template by ID from the templates directory"""
@@ -263,13 +255,6 @@ class BehavioralRuleManager:
                             "maxPoints": data.get("maxPoints"),
                             "condition": data.get("condition"),
                             "rule_ids": data.get("rule_ids", []),
-                            # Include evaluation results if present
-                            "last_evaluation": data.get("last_evaluation"),
-                            "earned_points": data.get("earned_points"),
-                            "best_rule_id": data.get("best_rule_id"),
-                            "fulfilled": data.get("fulfilled"),
-                            "confidence": data.get("confidence"),
-                            "problematic_elements": data.get("problematic_elements"),
                         }
                     )
             except Exception as e:
@@ -348,45 +333,3 @@ class BehavioralRuleManager:
                     f"Rule '{rule_id}' not found in group '{group.group_id}'"
                 )
         return True
-
-    def update_group_evaluation(
-        self, group_id: str, evaluation_result
-    ) -> BehavioralRuleGroup:
-        """
-        Update a group with evaluation results and save to disk
-
-        Args:
-            group_id: The group to update
-            evaluation_result: GroupEvaluationResult from evaluation
-
-        Returns:
-            Updated BehavioralRuleGroup with evaluation results embedded
-        """
-        # Load existing group
-        group = self.get_group(group_id)
-        if group is None:
-            raise ValueError(f"Group '{group_id}' not found")
-
-        # Update with evaluation results
-        group.last_evaluation = datetime.now().isoformat() + "Z"
-        group.earned_points = evaluation_result.earned_points
-        group.best_rule_id = evaluation_result.best_rule_id
-        group.fulfilled = evaluation_result.fulfilled
-        group.confidence = evaluation_result.overall_confidence
-        group.problematic_elements = evaluation_result.problematic_elements
-
-        # Save individual template results
-        group.rule_results = [
-            RuleEvaluationSummary(
-                rule_id=tr.rule_id,
-                rule_name=tr.rule_name,
-                description=tr.description,
-                earned_points=tr.earned_points,
-                confidence=tr.confidence,
-                success=tr.success,
-            )
-            for tr in evaluation_result.rule_results
-        ]
-
-        # Save to disk
-        return self.save_group(group)

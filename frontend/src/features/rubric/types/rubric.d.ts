@@ -32,6 +32,13 @@ export interface Criterion {
         description: string;
         maxPoints: number;
     }[];
+
+    // Per-model group evaluation breakdown (composed onto group criteria by the backend)
+    group_result?: {
+        best_rule_id?: string | null;
+        earned_points: number;
+        rule_results: RuleEvaluationResult[];
+    };
 }
 
 export interface Assignment {

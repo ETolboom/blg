@@ -35,4 +35,4 @@ COPY --from=frontend-builder /frontend/dist ./static
 EXPOSE 8000
 
 # Using uv run automatically uses the .venv
-CMD ["uv", "run", "main.py", "assignment"]
+CMD ["uv", "run", "main.py", "data"]

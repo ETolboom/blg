@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import sys
@@ -7,75 +6,44 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from pydantic import ValidationError
 
 from checks.manager import CheckRegistry
-from routers import submissions, rubric
+from routers import projects, submissions, rubric
 from routers import checks as checks_router
 from routers import behavioral_rules, behavioral_rule_groups
-from rubric import Rubric
-from rules.manager import BehavioralRuleManager
-from services.submissions import SubmissionService
 
 logger = logging.getLogger(__name__)
 
 
-def get_rubric_from_disk(base_path: str) -> Rubric | None:
-    """Load and return a Rubric from disk, or None if not found or invalid."""
-    if os.path.exists(os.path.join(base_path, "rubric.json")):
-        try:
-            with open(os.path.join(base_path, "rubric.json")) as file:
-                rubric_data = json.load(file)
-            logger.info("Rubric loaded successfully")
-            rubric = Rubric(**rubric_data)
-
-            # Load reference XML from separate file
-            ref_path = os.path.join(base_path, "reference.bpmn")
-            if os.path.exists(ref_path):
-                with open(ref_path) as f:
-                    rubric.assignment.reference_xml = f.read()
-                logger.info("Reference XML loaded from reference.bpmn")
-
-            return rubric
-        except json.JSONDecodeError:
-            logger.error("rubric.json contains invalid JSON")
-            return None
-        except ValidationError as e:
-            logger.error("JSON data doesn't match Rubric model: %s", e)
-            return None
-        except Exception as e:
-            logger.error("Error loading rubric: %s", e)
-            return None
-    else:
-        return None
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize app state (registry, rubric, rule manager, submission service) on startup."""
-    base_path = app.state.base_path
+    """Initialize global app state on startup.
 
-    # Load checks during startup
+    Only the (global) check registry is loaded here. No project is active until
+    the client selects one via the projects API — at which point the rubric,
+    rule manager and submission service are built for that project.
+    """
     registry = CheckRegistry()
     registry.load()
     app.state.check_registry = registry
 
-    # Load rubric from disk
-    app.state.rubric = get_rubric_from_disk(base_path)
+    # Ensure the multi-project layout exists.
+    os.makedirs(os.path.join(app.state.data_root, "assignments"), exist_ok=True)
+    os.makedirs(os.path.join(app.state.data_root, "templates"), exist_ok=True)
 
-    # Initialize rule manager
-    app.state.rule_manager = BehavioralRuleManager(
-        rules_dir=os.path.join(base_path, "rules")
-    )
-
-    # Initialize submission service
-    app.state.submission_service = SubmissionService(base_path, app.state.rubric)
+    # No project active until one is selected.
+    app.state.active_project = None
+    app.state.base_path = None
+    app.state.rubric = None
+    app.state.rule_manager = None
+    app.state.submission_service = None
 
     yield
 
 
 app = FastAPI(lifespan=lifespan)
 
+app.include_router(projects.router, prefix="/api", tags=["projects"])
 app.include_router(submissions.router, prefix="/api", tags=["submissions"])
 app.include_router(rubric.router, prefix="/api", tags=["rubric"])
 app.include_router(checks_router.router, prefix="/api", tags=["checks"])
@@ -104,22 +72,19 @@ if os.path.isdir(_FRONTEND_DIR):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Please provide a folder path")
-        print("Usage: python main.py <folder path>")
+        print("Please provide a data root folder path")
+        print("Usage: python main.py <data root>")
         sys.exit(1)
 
-    base_path = sys.argv[1]
+    data_root = sys.argv[1]
 
-    # Initialize data directory structure
-    if not os.path.exists(base_path):
-        print(f"Directory '{base_path}' not found. Creating it...")
-        os.makedirs(base_path, exist_ok=True)
+    # Initialize the multi-project data layout: <root>/assignments + <root>/templates
+    if not os.path.exists(data_root):
+        print(f"Directory '{data_root}' not found. Creating it...")
+    os.makedirs(os.path.join(data_root, "assignments"), exist_ok=True)
+    os.makedirs(os.path.join(data_root, "templates"), exist_ok=True)
 
-    # Create required subdirectories
-    for subdir in ["submissions", "rules", "templates"]:
-        os.makedirs(os.path.join(base_path, subdir), exist_ok=True)
-
-    # Load checks during startup (dependencies loaded automatically)
+    # Validate checks load before serving (dependencies loaded automatically)
     try:
         registry = CheckRegistry()
         registry.load()
@@ -127,8 +92,8 @@ if __name__ == "__main__":
         print(f"Could not load checks: {e}")
         sys.exit(1)
 
-    # Set base_path before lifespan runs
-    app.state.base_path = base_path
+    # Set data_root before lifespan runs
+    app.state.data_root = data_root
 
     # logging.basicConfig(level=logging.DEBUG)
     uvicorn.run(app, host="0.0.0.0", port=8000)

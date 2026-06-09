@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import {onMounted, onActivated, ref, shallowRef, useTemplateRef, nextTick} from "vue";
+import {useRouter} from "vue-router";
 import {ProgressBar, useToast, Tabs, TabList, Tab, TabPanels, TabPanel} from "primevue";
 import {createModeler} from "@/features/bpmn/modeler";
 import BpmnModeler from "bpmn-js/lib/Modeler";
-import {checkService, ApiError, rubricService, submissionService} from "@/services";
+import {checkService, ApiError, projectService, rubricService, submissionService, REFERENCE_FILENAME} from "@/services";
 import type {Rubric, Rubric as RubricType} from "@/features/rubric/types/rubric";
 import GradingZoomControls from "@/features/grading/components/GradingZoomControls.vue";
 import GradingHeader from "@/features/grading/components/GradingHeader.vue";
@@ -12,6 +13,7 @@ import OnboardingView from "@/features/onboarding/views/OnboardingView.vue";
 import RubricLayout from "@/features/rubric/layouts/RubricLayout.vue";
 
 const toast = useToast();
+const router = useRouter();
 
 const bpmn = useTemplateRef<HTMLDivElement>("bpmn-container");
 const modeler = shallowRef<BpmnModeler>();
@@ -55,10 +57,22 @@ const loadRubric = async () => {
 };
 
 onMounted(async () => {
+  // 0. Ensure a project is active; otherwise return to the landing screen.
   // 1. Check the backend for existing rubric
   // Yes -> Load rubric
   // No -> Start onboarding
   // 2. Once rubric is loaded, create a modeler
+
+  try {
+    const { active_project } = await projectService.getActiveProject();
+    if (!active_project) {
+      await router.push("/");
+      return;
+    }
+  } catch {
+    await router.push("/");
+    return;
+  }
 
   await loadRubric();
 
@@ -174,7 +188,7 @@ const gradeSubmission = async (filename: string, model_xml: string) => {
 };
 
 const saveSubmission = async () => {
-  if (!submission_name.value || submission_name.value === "Reference" || !rubric.value) {
+  if (!submission_name.value || submission_name.value === REFERENCE_FILENAME || !rubric.value) {
     return;
   }
 

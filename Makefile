@@ -20,7 +20,7 @@ install:
 	@echo "Installing frontend dependencies..."
 	cd frontend && $(NPM) install
 
-DATA_DIR ?= assignment
+DATA_DIR ?= data
 
 run-backend:
 	cd backend && $(PYTHON) main.py $(DATA_DIR)

@@ -4,7 +4,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from pydantic import BaseModel
 
-from checks import CheckFormInput, CheckResult
+from checks import CheckComplexity, CheckFormInput, CheckResult
+from rules.manager import RuleEvaluationSummary
 
 
 class Assignment(BaseModel):
@@ -12,9 +13,10 @@ class Assignment(BaseModel):
     reference_xml: str | None = ""
 
 
-class RubricCriterion(CheckResult):
-    score: float | None = None
-    default_points: float = 1.0
+class GroupResultSummary(BaseModel):
+    best_rule_id: str | None = None
+    earned_points: float = 0.0
+    rule_results: list[RuleEvaluationSummary] = []
 
 
 class SubmissionCriterionResult(BaseModel):
@@ -24,10 +26,36 @@ class SubmissionCriterionResult(BaseModel):
     confidence: float = 0.0
     problematic_elements: list[str] = []
     inputs: list[CheckFormInput] = []
+    group_result: GroupResultSummary | None = None
 
 
 class SubmissionResult(BaseModel):
     criteria: list[SubmissionCriterionResult] = []
+
+
+class RubricCriterion(CheckResult):
+    fulfilled: bool | None = None
+    score: float | None = None
+    default_points: float = 1.0
+    group_result: GroupResultSummary | None = None
+
+
+class CriterionDefinition(BaseModel):
+    id: str
+    name: str
+    check_complexity: CheckComplexity
+    description: str = ""
+    default_points: float = 1.0
+    inputs: list[CheckFormInput] = []
+
+
+class RubricDefinition(BaseModel):
+    criteria: list[CriterionDefinition]
+    assignment: Assignment | None = None
+
+    def to_disk_json(self) -> str:
+        """Serialize the rubric definition, excluding the reference XML."""
+        return self.model_dump_json(exclude={"assignment": {"reference_xml"}})
 
 
 class OnboardingRubric(BaseModel):

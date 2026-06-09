@@ -9,20 +9,32 @@ logger = logging.getLogger(__name__)
 from checks import CheckComplexity, CheckFormInput, CheckInputType, CheckResult
 from checks.implementations.behavioral import WorkflowData, BehavioralRuleCheck
 from checks.manager import CheckRegistry
-from dependencies import get_check_registry, get_rule_manager, save_rubric
-from rubric import OnboardingRubric, Rubric, RubricCriterion
+from dependencies import (
+    get_check_registry,
+    get_rubric,
+    get_rule_manager,
+    get_submission_service,
+    save_rubric,
+)
+from rubric import (
+    CriterionDefinition,
+    OnboardingRubric,
+    Rubric,
+    RubricDefinition,
+)
 from rules.manager import BehavioralRule, BehavioralRuleManager
+from services.submissions import REFERENCE_FILENAME, SubmissionService
 
 router = APIRouter()
 
 
 @router.get("/rubric")
-async def get_current_rubric(request: Request) -> Rubric:
-    """Return the currently loaded rubric."""
-    rubric = request.app.state.rubric
-    if rubric is None:
-        raise HTTPException(status_code=404, detail="Rubric not found")
-    return rubric
+async def get_current_rubric(
+    _rubric: RubricDefinition = Depends(get_rubric),
+    submission_service: SubmissionService = Depends(get_submission_service),
+) -> Rubric:
+    """Return the composed reference rubric (definitions + reference evaluation)."""
+    return submission_service.compose_rubric(REFERENCE_FILENAME)
 
 
 class ReferenceUpdateRequest(BaseModel):
@@ -30,14 +42,14 @@ class ReferenceUpdateRequest(BaseModel):
 
 
 @router.put("/rubric/reference")
-async def update_reference(body: ReferenceUpdateRequest, request: Request) -> dict:
+async def update_reference(
+    body: ReferenceUpdateRequest,
+    request: Request,
+    rubric: RubricDefinition = Depends(get_rubric),
+    submission_service: SubmissionService = Depends(get_submission_service),
+) -> dict:
     """Overwrite reference.bpmn on disk and update app state."""
-    rubric = request.app.state.rubric
-    if rubric is None:
-        raise HTTPException(status_code=404, detail="No rubric loaded")
-
-    base_path = request.app.state.base_path
-    with open(os.path.join(base_path, "reference.bpmn"), "w") as f:
+    with open(os.path.join(submission_service.base_path, "reference.bpmn"), "w") as f:
         f.write(body.reference_xml)
 
     rubric.assignment.reference_xml = body.reference_xml
@@ -51,9 +63,17 @@ async def handle_onboarding_rubric(
     onboarding_rubric: OnboardingRubric,
     request: Request,
     registry: CheckRegistry = Depends(get_check_registry),
+    submission_service: SubmissionService = Depends(get_submission_service),
 ) -> Rubric:
-    """Create and persist a new rubric from an onboarding payload, running initial check analysis."""
-    base_path = request.app.state.base_path
+    """Create and persist a new rubric definition from an onboarding payload.
+
+    A first-pass ``analyze(inputs=None)`` is run per selected check only to
+    extract its default configuration (e.g. reference task labels), which is
+    stored as the criterion *definition*. Scoring is left to the reference
+    evaluation that ``save_rubric`` triggers. Requires an active project (no
+    existing rubric required — this creates it).
+    """
+    base_path = submission_service.base_path
 
     ref_xml = (
         onboarding_rubric.assignment.reference_xml
@@ -62,50 +82,42 @@ async def handle_onboarding_rubric(
     )
     manager = registry.create_manager(ref_xml)
 
-    parsed_algorithms = []
-    if len(onboarding_rubric.checks) != 0:
-        for algorithm in onboarding_rubric.checks:
-            # Since we don't ask for inputs during onboarding
-            # we assume that inputs are [] so the algorithm tries to
-            # do a first pass / a best effort analysis.
-            result = manager.get_check(algorithm).analyze(inputs=None)
-            parsed_algorithms.append(
-                RubricCriterion(
-                    id=result.id,
-                    name=result.name,
-                    description=result.description,
-                    check_complexity=result.check_complexity,
-                    fulfilled=result.fulfilled,
-                    inputs=result.inputs,
-                    confidence=result.confidence,
-                    problematic_elements=result.problematic_elements,
-                    default_points=1.0,
-                    score=None,
-                )
+    definitions: list[CriterionDefinition] = []
+    for algorithm in onboarding_rubric.checks:
+        result = manager.get_check(algorithm).analyze(inputs=None)
+        definitions.append(
+            CriterionDefinition(
+                id=result.id,
+                name=result.name,
+                description=result.description,
+                check_complexity=result.check_complexity,
+                inputs=result.inputs,
+                default_points=1.0,
             )
+        )
 
-    new_rubric = Rubric(
-        criteria=parsed_algorithms,
+    new_rubric = RubricDefinition(
+        criteria=definitions,
         assignment=onboarding_rubric.assignment,
     )
 
-    # Write reference XML to separate file
+    # Write reference XML to separate file before persisting (so the reference
+    # evaluation triggered by save_rubric can read it).
     if ref_xml:
         with open(os.path.join(base_path, "reference.bpmn"), "w") as f:
             f.write(ref_xml)
 
     save_rubric(request, new_rubric)
 
-    return new_rubric
+    return submission_service.compose_rubric(REFERENCE_FILENAME)
 
 
 @router.post("/rubric/criteria/behavioral/analyze")
-def analyze_behavioral_criteria(data: WorkflowData, request: Request) -> CheckResult:
+def analyze_behavioral_criteria(
+    data: WorkflowData,
+    rubric: RubricDefinition = Depends(get_rubric),
+) -> CheckResult:
     """Run a behavioral rule check against the reference BPMN and return the result."""
-    rubric = request.app.state.rubric
-    if rubric is None:
-        raise HTTPException(status_code=404, detail="No rubric loaded")
-
     try:
         alg = BehavioralRuleCheck(model_xml=rubric.assignment.reference_xml)
         return alg.check_behavior(workflow=data)
@@ -118,13 +130,11 @@ async def add_behavioral_criteria(
     behavioral_id: str,
     inputs: BehavioralRule,
     request: Request,
+    rubric: RubricDefinition = Depends(get_rubric),
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
+    submission_service: SubmissionService = Depends(get_submission_service),
 ) -> Rubric:
     """Save a behavioral rule and add (or replace) it as a criterion in the rubric."""
-    rubric = request.app.state.rubric
-    if rubric is None:
-        raise HTTPException(status_code=404, detail="No rubric loaded")
-
     try:
         # If no nodes/edges provided, try loading existing rule or seeding from template
         if len(inputs.nodes) == 0 and len(inputs.edges) == 0:
@@ -147,10 +157,10 @@ async def add_behavioral_criteria(
         # Save rule to disk
         rule_manager.save_rule(inputs)
 
-        # Store only a reference to the rule ID in the rubric
-        # The actual rule data is loaded from disk when needed
+        # Store only a reference to the rule ID in the rubric definition.
+        # The actual rule data is loaded from disk when needed.
         rubric.criteria.append(
-            RubricCriterion(
+            CriterionDefinition(
                 id=inputs.id,
                 name=inputs.name,
                 description=inputs.description,
@@ -159,20 +169,16 @@ async def add_behavioral_criteria(
                     CheckFormInput(
                         input_label="template_id",
                         input_type=CheckInputType.STRING,
-                        data=inputs.id,  # Only store the template ID
+                        data=inputs.id,  # Only store the rule ID
                     ),
                 ],
-                fulfilled=True,
-                confidence=1.0,
-                problematic_elements=[],
                 default_points=inputs.maxPoints,
-                score=None,
             )
         )
 
         save_rubric(request, rubric)
 
-        return rubric
+        return submission_service.compose_rubric(REFERENCE_FILENAME)
     except HTTPException:
         raise
     except Exception as e:
@@ -186,13 +192,11 @@ async def update_criteria(
     algorithm_id: str,
     inputs: list[CheckFormInput],
     request: Request,
+    rubric: RubricDefinition = Depends(get_rubric),
     registry: CheckRegistry = Depends(get_check_registry),
+    submission_service: SubmissionService = Depends(get_submission_service),
 ) -> Rubric:
     """Run a standard check with the provided inputs and upsert the result as a rubric criterion."""
-    rubric = request.app.state.rubric
-    if rubric is None:
-        raise HTTPException(status_code=404, detail="No rubric loaded")
-
     try:
         # Prevent any duplicates by removing old instances of the algorithm.
         index = next(
@@ -210,25 +214,22 @@ async def update_criteria(
             manager = registry.create_manager(rubric.assignment.reference_xml)
         else:
             manager = registry.create_manager("")
+        # Run the check once to capture its configured inputs as the definition.
         result = manager.get_check(algorithm_id).analyze(inputs=inputs)
         rubric.criteria.append(
-            RubricCriterion(
+            CriterionDefinition(
                 id=algorithm_id,
                 name=result.name,
                 description=result.description,
                 check_complexity=result.check_complexity,
-                fulfilled=result.fulfilled,
                 inputs=result.inputs,
-                confidence=result.confidence,
-                problematic_elements=result.problematic_elements,
                 default_points=1.0,
-                score=None,
             )
         )
 
         save_rubric(request, rubric)
 
-        return rubric
+        return submission_service.compose_rubric(REFERENCE_FILENAME)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to update criteria: {str(e)}"
@@ -236,9 +237,12 @@ async def update_criteria(
 
 
 @router.post("/rubric/supplement")
-async def upload_supplement(file: UploadFile, request: Request) -> dict:
+async def upload_supplement(
+    file: UploadFile,
+    submission_service: SubmissionService = Depends(get_submission_service),
+) -> dict:
     """Upload a supplement PDF for the rubric."""
-    base_path = request.app.state.base_path
+    base_path = submission_service.base_path
 
     # Validate file extension
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -269,10 +273,11 @@ async def upload_supplement(file: UploadFile, request: Request) -> dict:
 
 
 @router.get("/rubric/supplement")
-async def get_supplement(request: Request) -> Response:
+async def get_supplement(
+    submission_service: SubmissionService = Depends(get_submission_service),
+) -> Response:
     """Retrieve the supplement PDF if it exists."""
-    base_path = request.app.state.base_path
-    supplement_path = os.path.join(base_path, "supplement.pdf")
+    supplement_path = os.path.join(submission_service.base_path, "supplement.pdf")
 
     if not os.path.exists(supplement_path):
         raise HTTPException(status_code=404, detail="No supplement PDF found")
@@ -288,10 +293,11 @@ async def get_supplement(request: Request) -> Response:
 
 
 @router.delete("/rubric/supplement")
-async def delete_supplement(request: Request) -> dict:
+async def delete_supplement(
+    submission_service: SubmissionService = Depends(get_submission_service),
+) -> dict:
     """Delete the supplement PDF."""
-    base_path = request.app.state.base_path
-    supplement_path = os.path.join(base_path, "supplement.pdf")
+    supplement_path = os.path.join(submission_service.base_path, "supplement.pdf")
 
     if not os.path.exists(supplement_path):
         raise HTTPException(status_code=404, detail="No supplement PDF found")
@@ -306,15 +312,11 @@ async def delete_supplement(request: Request) -> dict:
 async def delete_rubric_criterion(
     criterion_id: str,
     request: Request,
+    rubric: RubricDefinition = Depends(get_rubric),
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
 ) -> dict:
     """Delete a rubric criterion; for group criteria, restores the individual templates first."""
-    rubric = request.app.state.rubric
-
     try:
-        if rubric is None:
-            raise HTTPException(status_code=404, detail="No rubric loaded")
-
         # Find criterion
         index = next(
             (i for i, c in enumerate(rubric.criteria) if c.id == criterion_id), -1
@@ -353,7 +355,7 @@ async def delete_rubric_criterion(
 async def _unmerge_and_delete_group(
     criterion_id: str,
     index: int,
-    rubric: Rubric,
+    rubric: RubricDefinition,
     request: Request,
     rule_manager: BehavioralRuleManager,
 ) -> dict:
@@ -400,7 +402,7 @@ async def _unmerge_and_delete_group(
         # Insert template at group's position
         rubric.criteria.insert(
             insert_position,
-            RubricCriterion(
+            CriterionDefinition(
                 id=template.id,
                 name=template.name,
                 description=template.description,
@@ -412,11 +414,7 @@ async def _unmerge_and_delete_group(
                         data=template.id,
                     ),
                 ],
-                fulfilled=True,
-                confidence=1.0,
-                problematic_elements=[],
                 default_points=template.maxPoints,
-                score=None,
             ),
         )
 

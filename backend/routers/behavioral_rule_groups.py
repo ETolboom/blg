@@ -10,13 +10,18 @@ from checks.implementations.behavioral import (
     BehavioralGroupEvaluator,
     GroupEvaluationResult,
 )
-from dependencies import get_rule_manager, save_rubric
-from rubric import RubricCriterion
+from dependencies import (
+    get_rubric,
+    get_rule_manager,
+    get_submission_service,
+    save_rubric,
+)
+from rubric import CriterionDefinition, RubricDefinition
 from rules.manager import (
     BehavioralRuleGroup,
     BehavioralRuleManager,
-    RuleEvaluationSummary,
 )
+from services.submissions import REFERENCE_FILENAME, SubmissionService
 
 router = APIRouter()
 
@@ -35,54 +40,13 @@ async def list_rule_groups(
 @router.get("/behavioral-rule-groups/{group_id}")
 async def get_rule_group(
     group_id: str,
-    request: Request,
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
-    filename: str | None = None,
 ) -> BehavioralRuleGroup:
-    """
-    Get a specific template group.
-
-    When `filename` is provided, evaluates the group fresh against that submission
-    and returns the group with updated results (read-only, nothing saved to disk).
-    When omitted, returns the stored group data (including the last reference evaluation).
-    """
+    """Retrieve an existing group definition."""
     try:
         group = rule_manager.get_group(group_id)
         if group is None:
             raise HTTPException(status_code=404, detail=f"Group '{group_id}' not found")
-
-        if filename is not None:
-            base_path = request.app.state.base_path
-            submission_path = os.path.join(base_path, "submissions", filename)
-            if not os.path.exists(submission_path):
-                raise HTTPException(
-                    status_code=404, detail=f"Submission '{filename}' not found"
-                )
-            with open(submission_path, encoding="utf-8") as f:
-                model_xml = f.read()
-
-            evaluator = BehavioralGroupEvaluator(
-                model_xml=model_xml, rule_manager=rule_manager
-            )
-            result = evaluator.evaluate_group(group)
-
-            group.earned_points = result.earned_points
-            group.best_rule_id = result.best_rule_id
-            group.fulfilled = result.fulfilled
-            group.confidence = result.overall_confidence
-            group.problematic_elements = result.problematic_elements
-            group.rule_results = [
-                RuleEvaluationSummary(
-                    rule_id=r.rule_id,
-                    rule_name=r.rule_name,
-                    description=r.description,
-                    earned_points=r.earned_points,
-                    confidence=r.confidence,
-                    success=r.success,
-                )
-                for r in result.rule_results
-            ]
-
         return group
     except HTTPException:
         raise
@@ -96,7 +60,7 @@ async def create_rule_group(
     request: Request,
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
 ) -> BehavioralRuleGroup:
-    """Create new template group and auto-evaluate it if a reference model is loaded"""
+    """Create a new group definition."""
     try:
         # Check if group already exists
         if rule_manager.group_exists(group.group_id):
@@ -105,22 +69,9 @@ async def create_rule_group(
                 detail=f"Group with ID '{group.group_id}' already exists. Use PUT to update.",
             )
 
-        # Validate that all templates exist
+        # Validate that all referenced rules exist
         rule_manager.validate_group_rules(group)
-        saved_group = rule_manager.save_group(group)
-
-        # Auto-evaluate if a reference model is available
-        rubric = request.app.state.rubric
-        if rubric and rubric.assignment and rubric.assignment.reference_xml:
-            evaluator = BehavioralGroupEvaluator(
-                model_xml=rubric.assignment.reference_xml, rule_manager=rule_manager
-            )
-            result = evaluator.evaluate_group(saved_group)
-            saved_group = rule_manager.update_group_evaluation(
-                saved_group.group_id, result
-            )
-
-        return saved_group
+        return rule_manager.save_group(group)
     except HTTPException:
         raise
     except ValueError as e:
@@ -185,12 +136,7 @@ async def validate_rule_group(
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
     filename: str | None = None,
 ) -> GroupEvaluationResult:
-    """
-    Validate a behavioral rule group against a BPMN model.
-
-    When `filename` is provided, evaluates against that submission (read-only, results not saved).
-    When omitted, evaluates against the reference BPMN and saves results to the group's JSON file.
-    """
+    """Validate a behavioral rule group against a BPMN model"""
     rubric = request.app.state.rubric
     base_path = request.app.state.base_path
 
@@ -219,12 +165,7 @@ async def validate_rule_group(
         evaluator = BehavioralGroupEvaluator(
             model_xml=model_xml, rule_manager=rule_manager
         )
-        result = evaluator.evaluate_group(group)
-
-        if filename is None:
-            rule_manager.update_group_evaluation(group_id, result)
-
-        return result
+        return evaluator.evaluate_group(group)
     except HTTPException:
         raise
     except Exception as e:
@@ -240,12 +181,7 @@ def analyze_behavioral_group(
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
     filename: str | None = None,
 ) -> GroupEvaluationResult:
-    """
-    Evaluate a template group against a BPMN model.
-
-    When `filename` is provided, evaluates against that submission (read-only, results not saved).
-    When omitted, evaluates against the reference BPMN and saves results to the group's JSON file.
-    """
+    """Evaluate a group definition against a BPMN model."""
     rubric = request.app.state.rubric
     base_path = request.app.state.base_path
 
@@ -270,13 +206,7 @@ def analyze_behavioral_group(
         evaluator = BehavioralGroupEvaluator(
             model_xml=model_xml, rule_manager=rule_manager
         )
-        result = evaluator.evaluate_group(group)
-
-        # Save evaluation results only when evaluating against the reference
-        if filename is None and rule_manager.group_exists(group.group_id):
-            rule_manager.update_group_evaluation(group.group_id, result)
-
-        return result
+        return evaluator.evaluate_group(group)
     except HTTPException:
         raise
     except Exception as e:
@@ -290,13 +220,11 @@ async def add_behavioral_group_to_rubric(
     group_id: str,
     group: BehavioralRuleGroup,
     request: Request,
+    rubric: RubricDefinition = Depends(get_rubric),
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
+    submission_service: SubmissionService = Depends(get_submission_service),
 ):
     """Add template group as rubric criterion"""
-    rubric = request.app.state.rubric
-    if rubric is None:
-        raise HTTPException(status_code=404, detail="No rubric loaded")
-
     try:
         # Ensure group_id matches
         if group.group_id != group_id:
@@ -330,9 +258,11 @@ async def add_behavioral_group_to_rubric(
         if index != -1:
             del rubric.criteria[index]
 
-        # Add to rubric with prefixed ID (frontend can identify groups by "group:" prefix)
+        # Add the group to the rubric definition with a "group:" prefixed id
+        # (the frontend identifies groups by that prefix). Scoring is handled by
+        # the reference evaluation that save_rubric triggers.
         rubric.criteria.append(
-            RubricCriterion(
+            CriterionDefinition(
                 id=prefixed_group_id,
                 name=group.name,
                 check_complexity=CheckComplexity.COMPLEX,
@@ -343,41 +273,13 @@ async def add_behavioral_group_to_rubric(
                         data=group.group_id,
                     )
                 ],
-                fulfilled=True,
-                confidence=1.0,
-                problematic_elements=[],
                 default_points=group.maxPoints or 0.0,
-                score=None,
             )
         )
 
-        # Auto-evaluate the group and overwrite the placeholder criterion values
-        if rubric.assignment and rubric.assignment.reference_xml:
-            evaluator = BehavioralGroupEvaluator(
-                model_xml=rubric.assignment.reference_xml, rule_manager=rule_manager
-            )
-            result = evaluator.evaluate_group(group)
-
-            criterion_index = next(
-                (i for i, c in enumerate(rubric.criteria) if c.id == prefixed_group_id),
-                -1,
-            )
-            if criterion_index != -1:
-                rubric.criteria[criterion_index].fulfilled = result.fulfilled
-                rubric.criteria[criterion_index].confidence = result.overall_confidence
-                rubric.criteria[
-                    criterion_index
-                ].problematic_elements = result.problematic_elements
-                earned = result.earned_points
-                if round(earned, 2) != round(group.maxPoints or 0.0, 2):
-                    rubric.criteria[criterion_index].score = earned
-
-            # Persist evaluation results into the group file
-            rule_manager.update_group_evaluation(group.group_id, result)
-
         save_rubric(request, rubric)
 
-        return rubric
+        return submission_service.compose_rubric(REFERENCE_FILENAME)
     except HTTPException:
         raise
     except ValueError as e:

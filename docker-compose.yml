@@ -6,8 +6,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount the directory where the rubrics and rules live
-      - ./backend/assignment:/app/assignment
+      # Mount the data root (assignments/ + global templates/)
+      - ./backend/data:/app/data
     environment:
       - HOST=0.0.0.0
       - PORT=8000

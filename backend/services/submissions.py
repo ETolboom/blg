@@ -6,16 +6,26 @@ import os
 from fastapi import HTTPException, UploadFile
 from openpyxl import Workbook
 
-from rubric import Rubric, RubricCriterion, SubmissionCriterionResult, SubmissionResult
+from rubric import (
+    RubricDefinition,
+    Rubric,
+    RubricCriterion,
+    SubmissionCriterionResult,
+    SubmissionResult,
+)
 
 # Maximum accepted size for an uploaded .bpmn submission.
 MAX_SUBMISSION_SIZE_MB = 10
 MAX_SUBMISSION_SIZE = MAX_SUBMISSION_SIZE_MB * 1024 * 1024
 
+# Sentinel "filename" that refers to the reference model rather than a submission.
+# Its evaluation is stored as <project>/reference.bpmn.json.
+REFERENCE_FILENAME = "Reference"
+
 
 class SubmissionService:
-    def __init__(self, base_path: str, rubric: Rubric | None):
-        """Initialize the service with the data directory path and the current rubric."""
+    def __init__(self, base_path: str, rubric: RubricDefinition | None):
+        """Initialize the service with the data directory path and the rubric definition."""
         self.base_path = base_path
         self.submissions_path = os.path.join(base_path, "submissions")
         self.rubric = rubric
@@ -30,8 +40,8 @@ class SubmissionService:
         ]
 
     def get_submission_xml(self, filename: str) -> str:
-        """Return raw BPMN XML for a submission; pass "Reference" to get the reference model."""
-        if filename == "Reference":
+        """Return raw BPMN XML for a submission; pass REFERENCE_FILENAME for the reference model."""
+        if filename == REFERENCE_FILENAME:
             if (
                 self.rubric
                 and self.rubric.assignment
@@ -45,86 +55,59 @@ class SubmissionService:
         with open(path) as f:
             return f.read()
 
-    def _read_submission_result(self, filename: str) -> SubmissionResult | None:
-        """Read a .bpmn.json file and return a SubmissionResult.
+    def _eval_path(self, filename: str) -> str:
+        """Path of the per-model evaluation file.
 
-        Handles backward compatibility with old Rubric-format files by
-        detecting the 'assignment' key and migrating on-the-fly.
+        The reference is treated as just another evaluated model, stored as
+        ``reference.bpmn.json`` next to the reference; submissions live under
+        ``submissions/<filename>.json``.
         """
-        path = os.path.join(self.submissions_path, filename + ".json")
+        if filename == REFERENCE_FILENAME:
+            return os.path.join(self.base_path, "reference.bpmn.json")
+        return os.path.join(self.submissions_path, filename + ".json")
+
+    def _read_eval(self, filename: str) -> SubmissionResult | None:
+        """Read a per-model evaluation file and return a SubmissionResult."""
+        path = self._eval_path(filename)
         if not os.path.exists(path):
             return None
 
         with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+            return SubmissionResult.model_validate(json.load(f))
 
-        # Detect old Rubric format by presence of "assignment" key
-        if "assignment" in data:
-            # Migrate from old format: extract criterion results
-            criteria = []
-            for c in data.get("criteria", []):
-                # Support both old "custom_score" and new "score" field names
-                score = c.get("score", c.get("custom_score"))
-                criteria.append(
-                    SubmissionCriterionResult(
-                        id=c["id"],
-                        score=score,
-                        fulfilled=c.get("fulfilled"),
-                        confidence=c.get("confidence", 0.0),
-                        problematic_elements=c.get("problematic_elements", []),
-                    )
-                )
-            return SubmissionResult(criteria=criteria)
-
-        return SubmissionResult.model_validate(data)
+    def write_eval(self, filename: str, result: SubmissionResult) -> None:
+        """Persist a per-model evaluation file."""
+        with open(self._eval_path(filename), "w", encoding="utf-8") as f:
+            f.write(result.model_dump_json())
 
     def compose_rubric(self, filename: str) -> Rubric:
-        """Compose a full Rubric by merging the reference rubric metadata
-        with submission-specific analysis results."""
-        result = self._read_submission_result(filename)
-        if result is None:
-            raise HTTPException(status_code=404, detail="Submission result not found")
-
+        """Compose a full Rubric by merging the ground-truth definition with a
+        model's evaluation results. A missing evaluation yields ungraded
+        criteria (fulfilled=None) rather than an error."""
         if self.rubric is None:
-            raise HTTPException(status_code=500, detail="No reference rubric loaded")
+            raise HTTPException(status_code=404, detail="No rubric loaded")
 
-        # Build a lookup from submission results by criterion id
+        result = self._read_eval(filename) or SubmissionResult()
         result_map = {cr.id: cr for cr in result.criteria}
 
         composed: list[RubricCriterion] = []
         for ref in self.rubric.criteria:
             sr = result_map.get(ref.id)
-            if sr is not None:
-                composed.append(
-                    RubricCriterion(
-                        id=ref.id,
-                        name=ref.name,
-                        description=ref.description,
-                        check_complexity=ref.check_complexity,
-                        inputs=ref.inputs,
-                        default_points=ref.default_points,
-                        fulfilled=sr.fulfilled,
-                        score=sr.score,
-                        confidence=sr.confidence,
-                        problematic_elements=sr.problematic_elements,
-                    )
+            composed.append(
+                RubricCriterion(
+                    id=ref.id,
+                    name=ref.name,
+                    description=ref.description,
+                    check_complexity=ref.check_complexity,
+                    inputs=ref.inputs,
+                    default_points=ref.default_points,
+                    fulfilled=sr.fulfilled if sr else None,
+                    score=sr.score if sr else None,
+                    confidence=sr.confidence if sr else 0.0,
+                    problematic_elements=sr.problematic_elements if sr else [],
+                    group_result=sr.group_result if sr else None,
                 )
-            else:
-                # New criterion added to rubric after analysis — no results yet
-                composed.append(
-                    RubricCriterion(
-                        id=ref.id,
-                        name=ref.name,
-                        description=ref.description,
-                        check_complexity=ref.check_complexity,
-                        inputs=ref.inputs,
-                        default_points=ref.default_points,
-                        fulfilled=None,
-                        score=None,
-                        confidence=0.0,
-                        problematic_elements=[],
-                    )
-                )
+            )
 
         return Rubric(criteria=composed, assignment=None)
 
@@ -170,24 +153,23 @@ class SubmissionService:
         self, filename: str, criteria: list[SubmissionCriterionResult]
     ) -> None:
         """Merge updated criterion results into the stored submission result file."""
-        path = os.path.join(self.submissions_path, filename + ".json")
-        if not os.path.exists(path):
+        if not os.path.exists(self._eval_path(filename)):
             raise HTTPException(status_code=404, detail="Submission not found")
 
         # Read existing result (handles backward compat)
-        result = self._read_submission_result(filename)
-        if result is None:
-            result = SubmissionResult()
+        result = self._read_eval(filename) or SubmissionResult()
 
-        # Build map from existing criteria, then overlay updates
+        # Build map from existing criteria, then overlay updates. Preserve an
+        # existing group breakdown when a manual update doesn't carry one.
         existing_map = {cr.id: cr for cr in result.criteria}
         for updated in criteria:
+            prev = existing_map.get(updated.id)
+            if updated.group_result is None and prev is not None and prev.group_result:
+                updated.group_result = prev.group_result
             existing_map[updated.id] = updated
 
         result.criteria = list(existing_map.values())
-
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(result.model_dump_json())
+        self.write_eval(filename, result)
 
     def export_submission(self, filename: str) -> bytes:
         """Export the graded rubric for a single submission as Excel bytes."""

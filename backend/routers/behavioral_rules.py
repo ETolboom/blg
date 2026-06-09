@@ -1,16 +1,51 @@
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from checks.implementations.behavioral import (
+    MatchDetail,
     WorkflowData,
     BehavioralRuleCheck,
-    BehavioralGroupEvaluator,
 )
-from dependencies import get_rule_manager
+from dependencies import (
+    get_rule_manager,
+    get_submission_service,
+    recompute_reference_eval,
+)
 from rules.manager import BehavioralRule, BehavioralRuleManager
+from services.submissions import SubmissionService
 
 router = APIRouter()
+
+
+class AffectedGroup(BaseModel):
+    """A group re-evaluated as a side effect of validating one of its rules."""
+
+    group_id: str
+    group_name: str
+
+
+class ValidationResult(BaseModel):
+    """Per-node match results for a single rule validation.
+
+    Reuses the ``MatchDetail`` dataclass directly as the item type (Pydantic v2
+    serializes stdlib dataclasses), so the match shape isn't duplicated here.
+    """
+
+    fulfilled: bool
+    confidence: float
+    total_matches: int
+    earned_points: float
+    match_details: list[MatchDetail] = []
+    problematic_elements: list[str] = []
+
+
+class RuleValidationResponse(BaseModel):
+    rule_id: str
+    rule_name: str
+    validation_result: ValidationResult
+    affected_groups: list[AffectedGroup] = []
 
 
 @router.get("/behavioral-rule-templates")
@@ -126,8 +161,9 @@ async def validate_rule(
     rule_id: str,
     request: Request,
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
+    submission_service: SubmissionService = Depends(get_submission_service),
     filename: str | None = None,
-) -> dict:
+) -> RuleValidationResponse:
     """
     Validate a behavioral rule against a BPMN model.
 
@@ -135,7 +171,8 @@ async def validate_rule(
     When omitted, evaluates against the reference BPMN and updates the rubric entry and any
     affected groups.
     """
-    base_path = request.app.state.base_path
+    base_path = submission_service.base_path
+    # rubric is optional here: only the reference branch needs it.
     rubric = request.app.state.rubric
 
     try:
@@ -173,144 +210,39 @@ async def validate_rule(
         checker = BehavioralRuleCheck(model_xml=model_xml)
         result = checker.check_behavior(workflow=workflow_data)
 
-        # Collect problematic BPMN element IDs
-        problematic_elements = []
-        for match in result.match_details:
-            # Mark as problematic if:
-            # - Below minimal threshold (is_correct=False, score < 0.6)
-            # - Below ideal threshold (is_ideal_match=False, score < 0.8)
-            # - Not at ideal distance
-            if (
-                not match.is_correct
-                or not match.is_ideal_match
-                or not match.is_ideal_distance
-            ):
-                if match.bpmn_element_id not in problematic_elements:
-                    problematic_elements.append(match.bpmn_element_id)
-
-        # Calculate earned points
-        earned_points = result.earned_points
-
-        affected_groups = []
+        affected_groups: list[AffectedGroup] = []
 
         if filename is None:
-            # Update the rubric entry if it exists (individual rule)
-            criterion_index = next(
-                (
-                    i
-                    for i, criterion in enumerate(rubric.criteria)
-                    if criterion.id == rule_id
-                ),
-                -1,
-            )
+            # Validating against the reference: the rule definition on disk may
+            # have just changed, so recompute the whole reference evaluation
+            # (this rule + any groups containing it) and invalidate cached
+            # submission evaluations. Nothing is written into the rubric
+            # definition or group files anymore.
+            recompute_reference_eval(request.app)
+            submission_service.invalidate_all_results()
 
-            if criterion_index != -1:
-                rubric.criteria[criterion_index].default_points = rule.maxPoints
-                rubric.criteria[criterion_index].fulfilled = earned_points > 0
-                rubric.criteria[criterion_index].confidence = result.confidence
-                rubric.criteria[
-                    criterion_index
-                ].problematic_elements = problematic_elements
-
-                if round(earned_points, 2) != round(rule.maxPoints, 2):
-                    rubric.criteria[criterion_index].score = earned_points
-                else:
-                    rubric.criteria[criterion_index].score = None
-
-            all_groups = rule_manager.list_groups()
-
-            for group_info in all_groups:
+            for group_info in rule_manager.list_groups():
                 if rule_id in group_info.get("rule_ids", []):
-                    group = rule_manager.get_group(group_info["group_id"])
-                    if group is not None:
-                        evaluator = BehavioralGroupEvaluator(
-                            model_xml=rubric.assignment.reference_xml,
-                            rule_manager=rule_manager,
+                    affected_groups.append(
+                        AffectedGroup(
+                            group_id=group_info["group_id"],
+                            group_name=group_info["name"],
                         )
-                        group_result = evaluator.evaluate_group(group)
+                    )
 
-                        rule_manager.update_group_evaluation(
-                            group.group_id, group_result
-                        )
-
-                        prefixed_group_id = f"group:{group.group_id}"
-                        group_criterion_index = next(
-                            (
-                                i
-                                for i, criterion in enumerate(rubric.criteria)
-                                if criterion.id == prefixed_group_id
-                            ),
-                            -1,
-                        )
-
-                        if group_criterion_index != -1:
-                            rubric.criteria[
-                                group_criterion_index
-                            ].fulfilled = group_result.fulfilled
-                            rubric.criteria[
-                                group_criterion_index
-                            ].confidence = group_result.overall_confidence
-                            rubric.criteria[
-                                group_criterion_index
-                            ].problematic_elements = group_result.problematic_elements
-
-                            if round(group_result.earned_points, 2) != group.maxPoints:
-                                rubric.criteria[
-                                    group_criterion_index
-                                ].score = group_result.earned_points
-                            else:
-                                rubric.criteria[group_criterion_index].score = None
-
-                            affected_groups.append(
-                                {
-                                    "group_id": group.group_id,
-                                    "group_name": group.name,
-                                    "updated_points": group_result.earned_points,
-                                    "best_rule": group_result.best_rule_id,
-                                }
-                            )
-
-            # Save updated rubric to disk (includes both rule and group updates)
-            if criterion_index != -1 or affected_groups:
-                request.app.state.rubric = rubric
-                request.app.state.submission_service.rubric = rubric
-
-                with open(os.path.join(base_path, "rubric.json"), "w") as f:
-                    f.write(rubric.to_disk_json())
-
-                request.app.state.submission_service.invalidate_all_results()
-
-        # Return validation results (including affected groups)
-        return {
-            "rule_id": rule_id,
-            "rule_name": rule.name,
-            "validation_result": {
-                "fulfilled": result.fulfilled,
-                "confidence": result.confidence,
-                "total_matches": result.total_matches,
-                "earned_points": result.earned_points,
-                "match_details": [
-                    {
-                        "workflow_node_id": match.workflow_node_id,
-                        "workflow_label": match.workflow_label,
-                        "bpmn_element_id": match.bpmn_element_id,
-                        "bpmn_label": match.bpmn_label,
-                        "match_score": match.match_score,
-                        "distance": match.distance,
-                        "ideal_distance": match.ideal_distance,
-                        "max_distance": match.max_distance,
-                        "is_correct": match.is_correct,
-                        "is_ideal_distance": match.is_ideal_distance,
-                        "is_ideal_match": match.is_ideal_match,
-                        "minimal_match_threshold": match.minimal_match_threshold,
-                        "ideal_match_threshold": match.ideal_match_threshold,
-                    }
-                    for match in result.match_details
-                ],
-                "problematic_elements": result.problematic_elements,
-            },
-            "affected_groups": affected_groups,  # NEW: List of groups that were re-evaluated
-        }
+        return RuleValidationResponse(
+            rule_id=rule_id,
+            rule_name=rule.name,
+            validation_result=ValidationResult(
+                fulfilled=result.fulfilled,
+                confidence=result.confidence,
+                total_matches=result.total_matches,
+                earned_points=result.earned_points,
+                match_details=result.match_details,
+                problematic_elements=result.problematic_elements,
+            ),
+            affected_groups=affected_groups,
+        )
     except HTTPException:
         raise
     except Exception as e:
