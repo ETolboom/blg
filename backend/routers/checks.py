@@ -48,6 +48,8 @@ async def analyze_submission(
 ) -> Rubric:
     """Analyze a student submission against the rubric and return the composed result."""
     rubric = request.app.state.rubric
+    if rubric is None:
+        raise HTTPException(status_code=404, detail="No rubric loaded")
 
     if filename == "":
         raise HTTPException(status_code=404, detail="No filename provided")

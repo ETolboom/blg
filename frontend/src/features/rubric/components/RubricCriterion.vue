@@ -121,7 +121,7 @@ function finishEdit() {
       </div>
       <div class="flex items-center pr-2 absolute right-0">
         <button v-if="category === CheckComplexity.COMPLEX || (category !== CheckComplexity.SIMPLE && isEditable)" class="p-2 hover:bg-gray-100 rounded-md transition-colors" :title="isEditable ? 'Edit rule' : 'View rule'"
-                @click.stop="() => { console.log('Edit button clicked', category); $emit('edit'); }">
+                @click.stop="$emit('edit')">
 
           <Edit v-if="category !== CheckComplexity.COMPLEX" :size="20" class="text-gray-600"/>
           <ExternalLink v-else :size="20" class="text-gray-600"/>

@@ -7,7 +7,6 @@ defineProps<{
 
 defineEmits<{
   'toggle-sidebar': [];
-  'open-menu': [];
 }>();
 
 
@@ -33,18 +32,8 @@ defineEmits<{
       </div>
     </div>
 
-    <button
-        aria-label="Options"
-        class="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-        type="button"
-        @click="$emit('open-menu')"
-    >
-      <svg fill="none" height="18" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="18">
-        <circle cx="12" cy="12" r="1"/>
-        <circle cx="12" cy="5" r="1"/>
-        <circle cx="12" cy="19" r="1"/>
-      </svg>
-    </button>
+    <!-- Spacer to keep the title centered (options menu removed; see V1_ROADMAP Phase 4.1) -->
+    <div class="w-[34px] shrink-0" aria-hidden="true"></div>
   </div>
 </template>
 

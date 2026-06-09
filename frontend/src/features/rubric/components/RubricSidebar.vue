@@ -68,10 +68,6 @@ const toggleSidebar = () => {
   sidebarVisible.value = !sidebarVisible.value;
 };
 
-const openMenu = () => {
-  alert("To be implemented.");
-};
-
 </script>
 
 <template>
@@ -80,7 +76,7 @@ const openMenu = () => {
     <div class="flex flex-col bg-gray-100 w-[32rem] text-white h-full relative border-l border-gray-200">
       <RubricHeader
           :sidebar-visible="sidebarVisible"
-          @toggle-sidebar="toggleSidebar" @open-menu="openMenu"/>
+          @toggle-sidebar="toggleSidebar"/>
         <div class="flex-auto overflow-y-auto py-2 px-2">
           <Accordion v-model:value="activeCategories" multiple>
             <AccordionPanel v-for="category in allCategories"
@@ -155,7 +151,7 @@ const openMenu = () => {
                         :criterion="item"
                         :is-editable="isEditable"
                         @click="emit('toggleHighlight', criteria.indexOf(item), item['problematic_elements'])"
-                        @edit="() => { console.log('Edit event in sidebar', item); emit('editCriterion', item); }"
+                        @edit="emit('editCriterion', item)"
                         @reset="emit('resetCustomScore', criteria.indexOf(item))"
                         @toggle="emit('toggleState', criteria.indexOf(item))"
                         @updatePoints="(points: Number) => emit('updatePoints', criteria.indexOf(item), points)"

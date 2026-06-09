@@ -294,6 +294,8 @@ async def add_behavioral_group_to_rubric(
 ):
     """Add template group as rubric criterion"""
     rubric = request.app.state.rubric
+    if rubric is None:
+        raise HTTPException(status_code=404, detail="No rubric loaded")
 
     try:
         # Ensure group_id matches

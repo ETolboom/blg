@@ -171,8 +171,6 @@ const runFlow = async () => {
         life: 5000
       });
     }
-
-    console.log('Validation results:', response);
   } catch (error) {
     if (error instanceof ApiError) {
       toast.add({
@@ -371,7 +369,6 @@ onMounted(async () => {
       nodes.value = currentRule.value.nodes || [];
       await nextTick();
       edges.value = currentRule.value.edges || [];
-      console.log('Loaded rule from route:', currentRule.value);
     } catch (error) {
       if (error instanceof ApiError) {
         toast.add({

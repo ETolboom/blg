@@ -8,6 +8,10 @@ from openpyxl import Workbook
 
 from rubric import Rubric, RubricCriterion, SubmissionCriterionResult, SubmissionResult
 
+# Maximum accepted size for an uploaded .bpmn submission.
+MAX_SUBMISSION_SIZE_MB = 10
+MAX_SUBMISSION_SIZE = MAX_SUBMISSION_SIZE_MB * 1024 * 1024
+
 
 class SubmissionService:
     def __init__(self, base_path: str, rubric: Rubric | None):
@@ -15,7 +19,6 @@ class SubmissionService:
         self.base_path = base_path
         self.submissions_path = os.path.join(base_path, "submissions")
         self.rubric = rubric
-        self.current_submission: str | None = None
 
     def list_submissions(self) -> list[dict]:
         """Return filename and display name for every .bpmn file in the submissions directory."""
@@ -146,8 +149,14 @@ class SubmissionService:
                     detail=f"'{file.filename}' is not a .bpmn file",
                 )
 
-            dest = os.path.join(self.submissions_path, file.filename)
             content = await file.read()
+            if len(content) > MAX_SUBMISSION_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"'{file.filename}' exceeds the {MAX_SUBMISSION_SIZE_MB}MB limit",
+                )
+
+            dest = os.path.join(self.submissions_path, file.filename)
             with open(dest, "wb") as f:
                 f.write(content)
 
@@ -205,7 +214,3 @@ class SubmissionService:
         workbook.save(excel_buffer)
         excel_buffer.seek(0)
         return excel_buffer.getvalue()
-
-    def select_submission(self, filename: str | None) -> None:
-        """Set the currently active submission filename."""
-        self.current_submission = filename

@@ -103,6 +103,8 @@ async def handle_onboarding_rubric(
 def analyze_behavioral_criteria(data: WorkflowData, request: Request) -> CheckResult:
     """Run a behavioral rule check against the reference BPMN and return the result."""
     rubric = request.app.state.rubric
+    if rubric is None:
+        raise HTTPException(status_code=404, detail="No rubric loaded")
 
     try:
         alg = BehavioralRuleCheck(model_xml=rubric.assignment.reference_xml)
@@ -120,6 +122,8 @@ async def add_behavioral_criteria(
 ) -> Rubric:
     """Save a behavioral rule and add (or replace) it as a criterion in the rubric."""
     rubric = request.app.state.rubric
+    if rubric is None:
+        raise HTTPException(status_code=404, detail="No rubric loaded")
 
     try:
         # If no nodes/edges provided, try loading existing rule or seeding from template
@@ -186,6 +190,8 @@ async def update_criteria(
 ) -> Rubric:
     """Run a standard check with the provided inputs and upsert the result as a rubric criterion."""
     rubric = request.app.state.rubric
+    if rubric is None:
+        raise HTTPException(status_code=404, detail="No rubric loaded")
 
     try:
         # Prevent any duplicates by removing old instances of the algorithm.
@@ -333,7 +339,7 @@ async def delete_rubric_criterion(
 
             return {
                 "message": f"Criterion '{criterion_id}' deleted successfully",
-                "unmerged_templates": [],
+                "unmerged_rules": [],
             }
 
     except HTTPException:
@@ -366,8 +372,8 @@ async def _unmerge_and_delete_group(
 
         return {
             "message": f"Group criterion '{criterion_id}' deleted (group file not found)",
-            "unmerged_templates": [],
-            "warning": "Group metadata not found - could not restore templates",
+            "unmerged_rules": [],
+            "warning": "Group metadata not found - could not restore rules",
         }
 
     # Restore templates at group's position
@@ -429,10 +435,10 @@ async def _unmerge_and_delete_group(
 
     result = {
         "message": f"Group '{criterion_id}' deleted and unmerged",
-        "unmerged_templates": restored,
+        "unmerged_rules": restored,
     }
 
     if missing:
-        result["warning"] = f"Some templates not found: {missing}"
+        result["warning"] = f"Some rules not found: {missing}"
 
     return result
