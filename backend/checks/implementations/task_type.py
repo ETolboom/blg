@@ -5,9 +5,9 @@ from checks import (
     CheckFormInput,
     CheckResult,
     CheckComplexity,
-    CheckInputType,
     CheckSelectionType,
     CheckSelectionPair,
+    SelectionFormInput,
 )
 from utils import extract_all_tasks, TaskType, ExtractedTask
 from utils.similarity import match_labels
@@ -31,9 +31,8 @@ class TaskTypeCheck(Check):
     ]
 
     input_scheme: ClassVar[list[CheckFormInput]] = [
-        CheckFormInput(
+        SelectionFormInput(
             input_label="Labels and Task Types",
-            input_type=CheckInputType.SELECTION,
             data=CheckSelectionType(
                 placeholder="Task Type", accepted_values=acceptable_task_types, pairs=[]
             ),
@@ -83,9 +82,8 @@ class TaskTypeCheck(Check):
                 problematic_elements=[],
                 fulfilled=fulfilled,
                 inputs=[
-                    CheckFormInput(
+                    SelectionFormInput(
                         input_label="Labels and Task Types",
-                        input_type=CheckInputType.SELECTION,
                         data=CheckSelectionType(
                             placeholder="Task Type",
                             accepted_values=self.acceptable_task_types,
@@ -105,7 +103,12 @@ class TaskTypeCheck(Check):
             self.model_xml, allow_abstract=True
         )
 
-        reference_labels = [pair.label for pair in inputs[0].data.pairs]
+        reference_input = inputs[0]
+        if not isinstance(reference_input, SelectionFormInput):
+            raise ValueError("Task type check requires a selection input")
+        reference_pairs = reference_input.data.pairs
+
+        reference_labels = [pair.label for pair in reference_pairs]
 
         matches = match_labels(
             target=[element.name for element in target_tasks],
@@ -117,7 +120,7 @@ class TaskTypeCheck(Check):
 
         for target_idx, ref_idx in matches:
             target_task: ExtractedTask = target_tasks[target_idx]
-            reference_task: CheckSelectionPair = inputs[0].data.pairs[ref_idx]
+            reference_task: CheckSelectionPair = reference_pairs[ref_idx]
 
             if (target_task.task_type == TaskType.ABSTRACT) or (
                 target_task.task_type != reference_task.type

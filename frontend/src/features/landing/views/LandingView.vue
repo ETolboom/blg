@@ -3,7 +3,7 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { Button, Dialog, InputText, ProgressBar, useToast } from "primevue";
 import { FolderOpen, Plus } from "lucide-vue-next";
-import { ApiError, projectService } from "@/services";
+import { projectService, toastError } from "@/services";
 
 const router = useRouter();
 const toast = useToast();
@@ -14,10 +14,8 @@ const isBusy = ref<boolean>(false);
 const createDialogVisible = ref<boolean>(false);
 const newProjectName = ref<string>("");
 
-const showError = (summary: string, error: unknown) => {
-  const detail = error instanceof ApiError ? error.detail : String(error);
-  toast.add({ severity: "error", summary, detail, life: 8000 });
-};
+const showError = (summary: string, error: unknown) =>
+  toastError(toast, summary, error, { life: 8000 });
 
 const loadProjects = async () => {
   isLoading.value = true;

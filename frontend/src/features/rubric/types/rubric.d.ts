@@ -1,23 +1,20 @@
+import type { Node, Edge } from "@vue-flow/core";
 import { Check } from "@/services/checkService.ts";
 import { GroupCondition, RuleEvaluationResult } from "@/features/behavior/types/group";
-import { CheckComplexityType } from "@/features/rubric/types/check_complexity";
 
-export interface Criterion {
-    id?: string;
-    name: string;
-    description: string;
+// A rubric criterion is a Check (id/name/description/check_complexity/inputs)
+// enriched with per-model grading state and the optional Template/Behavior and
+// Group fields. Behavioral rules and groups both live under the COMPLEX
+// category and are told apart by the `group:` id prefix (see isGroup()).
+export interface Criterion extends Check {
     fulfilled: boolean;
     default_points: number;
     score: number | null;
     problematic_elements: string[];
-    check_complexity: CheckComplexityType;
-
-    // Check specific
-    inputs?: CheckInput[];
 
     // Template/Behavior specific
-    nodes?: any[];
-    edges?: any[];
+    nodes?: Node[];
+    edges?: Edge[];
 
     // Group specific
     condition?: GroupCondition;

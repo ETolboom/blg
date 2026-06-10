@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import {onMounted, onActivated, ref, shallowRef, useTemplateRef, nextTick} from "vue";
+import {onMounted, onUnmounted, ref, shallowRef, useTemplateRef, nextTick} from "vue";
 import {useRouter} from "vue-router";
 import {ProgressBar, useToast, Tabs, TabList, Tab, TabPanels, TabPanel} from "primevue";
 import {createModeler} from "@/features/bpmn/modeler";
 import BpmnModeler from "bpmn-js/lib/Modeler";
-import {checkService, ApiError, projectService, rubricService, submissionService, REFERENCE_FILENAME} from "@/services";
+import {checkService, ApiError, projectService, rubricService, submissionService, toastError, toastSuccess, REFERENCE_FILENAME} from "@/services";
 import type {Rubric, Rubric as RubricType} from "@/features/rubric/types/rubric";
 import GradingZoomControls from "@/features/grading/components/GradingZoomControls.vue";
 import GradingHeader from "@/features/grading/components/GradingHeader.vue";
@@ -48,12 +48,49 @@ const loadRubric = async () => {
     if (error instanceof ApiError && error.status === 404) {
       isLoading.value = false;
       shouldOnboard.value = true;
-    } else if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Could not load rubric', detail: error.detail});
     } else {
-      toast.add({severity: 'error', summary: 'Could not load rubric', detail: String(error)});
+      toastError(toast, 'Could not load rubric', error);
     }
   }
+};
+
+// Named so it can be removed in onUnmounted (an anonymous closure could never be).
+const handleResize = () => {
+  modeler.value?.get('canvas').resized();
+};
+
+// Single place that creates the modeler and wires its listeners, shared by the
+// initial mount and the post-onboarding path so the setup never drifts or
+// double-registers. Returns false (after toasting) if it couldn't initialize.
+const initModeler = async (): Promise<boolean> => {
+  if (!bpmn.value || !reference_xml.value) {
+    toast.add({
+      severity: 'error',
+      summary: 'Initialization failed',
+      detail: 'Container or reference XML not available'
+    });
+    return false;
+  }
+
+  modeler.value = await createModeler(bpmn.value, reference_xml.value);
+
+  if (!modeler.value) {
+    toast.add({severity: 'error', summary: 'Initialization failed', detail: 'Could not create modeler'});
+    return false;
+  }
+
+  modeler.value.get('eventBus').on('commandStack.changed', () => {
+    if (activeTab.value === '1') hasReferenceChanges.value = true;
+  });
+
+  // Idempotent: removing an unregistered handler is a no-op, so re-initializing
+  // (e.g. after onboarding) never stacks duplicate resize listeners.
+  window.removeEventListener("resize", handleResize);
+  window.addEventListener("resize", handleResize);
+
+  isLoading.value = false;
+  isModelerReady.value = true;
+  return true;
 };
 
 onMounted(async () => {
@@ -78,39 +115,12 @@ onMounted(async () => {
 
   if (shouldOnboard.value) return;
 
-  if (!bpmn.value || !reference_xml.value) {
-    toast.add({
-      severity: 'error',
-      summary: 'Initialization failed',
-      detail: 'Container or reference XML not available'
-    });
-    return;
-  }
-
-  modeler.value = await createModeler(bpmn.value, reference_xml.value);
-
-  if (!modeler.value) {
-    toast.add({severity: 'error', summary: 'Initialization failed', detail: 'Could not create modeler'});
-    return;
-  }
-
-  modeler.value.get('eventBus').on('commandStack.changed', () => {
-    if (activeTab.value === '1') hasReferenceChanges.value = true;
-  });
-
-  window.addEventListener("resize", () => {
-    modeler.value?.get('canvas').resized();
-  });
-
-  isLoading.value = false;
-  isModelerReady.value = true;
+  await initModeler();
 });
 
-onActivated(async () => {
-    // Reload rubric data when view is reactivated (e.g. back button navigation)
-    if (isModelerReady.value) {
-        await loadRubric();
-    }
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize);
+  modeler.value?.destroy();
 });
 
 
@@ -144,7 +154,7 @@ const toggleReference = async () => {
     modeler.value.get('zoomScroll').reset();
     modeler.value.get('canvas').zoom("fit-viewport");
   } catch (err) {
-    toast.add({severity: 'error', summary: 'Loading failed', detail: String(err)});
+    toastError(toast, 'Loading failed', err);
   }
 
   isLoading.value = false;
@@ -177,10 +187,8 @@ const gradeSubmission = async (filename: string, model_xml: string) => {
     if (error instanceof ApiError && error.status === 404) {
       isLoading.value = false;
       shouldOnboard.value = true;
-    } else if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Could not grade submission', detail: error.detail});
     } else {
-      toast.add({severity: 'error', summary: 'Could not grade submission', detail: String(error)});
+      toastError(toast, 'Could not grade submission', error);
     }
   }
 
@@ -195,11 +203,7 @@ const saveSubmission = async () => {
   try {
     await submissionService.saveSubmission(submission_name.value, rubric.value.criteria);
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Could not save submission', detail: error.detail});
-    } else {
-      toast.add({severity: 'error', summary: 'Could not save submission', detail: String(error)});
-    }
+    toastError(toast, 'Could not save submission', error);
   }
 };
 
@@ -209,10 +213,10 @@ const saveReference = async () => {
   try {
     const { xml } = await modeler.value.saveXML({ format: true });
     if (!xml) throw new Error('Could not export XML from modeler');
-    await rubricService.updateReference(xml);
+    const result = await rubricService.updateReference(xml);
     reference_xml.value = xml;
     hasReferenceChanges.value = false;
-    toast.add({ severity: 'success', summary: 'Reference saved', life: 3000 });
+    toastSuccess(toast, 'Reference saved', result);
 
     if (submission_name.value && rubric.value) {
       isSavingReference.value = false;
@@ -223,7 +227,7 @@ const saveReference = async () => {
         rubric.value.criteria = result.criteria;
         toast.add({ severity: 'success', summary: 'Submission re-graded', life: 3000 });
       } catch (error) {
-        toast.add({ severity: 'warn', summary: 'Could not re-grade submission', detail: String(error) });
+        toastError(toast, 'Could not re-grade submission', error, { severity: 'warn' });
       } finally {
         isRegradingAfterSave.value = false;
       }
@@ -231,7 +235,7 @@ const saveReference = async () => {
       toast.add({ severity: 'info', summary: 'No submission loaded', detail: 'Open a submission to re-grade it against the updated reference', life: 4000 });
     }
   } catch (error) {
-    toast.add({ severity: 'error', summary: 'Could not save reference', detail: String(error) });
+    toastError(toast, 'Could not save reference', error);
   } finally {
     isSavingReference.value = false;
   }
@@ -244,7 +248,7 @@ const clearReference = async () => {
     modeler.value.get('canvas').zoom('fit-viewport');
     hasReferenceChanges.value = false;
   } catch (error) {
-    toast.add({ severity: 'error', summary: 'Could not clear changes', detail: String(error) });
+    toastError(toast, 'Could not clear changes', error);
   }
 };
 
@@ -256,34 +260,10 @@ const onOnboarded = async () => {
 
   if (shouldOnboard.value) return;
 
+  // Wait for the modeler container to render now that onboarding is dismissed.
   await nextTick();
 
-  if (!bpmn.value || !reference_xml.value) {
-    toast.add({
-      severity: 'error',
-      summary: 'Initialization failed',
-      detail: 'Container or reference XML not available'
-    });
-    return;
-  }
-
-  modeler.value = await createModeler(bpmn.value, reference_xml.value);
-
-  if (!modeler.value) {
-    toast.add({severity: 'error', summary: 'Initialization failed', detail: 'Could not create modeler'});
-    return;
-  }
-
-  modeler.value.get('eventBus').on('commandStack.changed', () => {
-    if (activeTab.value === '1') hasReferenceChanges.value = true;
-  });
-
-  window.addEventListener("resize", () => {
-    modeler.value?.get('canvas').resized();
-  });
-
-  isLoading.value = false;
-  isModelerReady.value = true;
+  await initModeler();
 };
 
 </script>

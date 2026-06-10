@@ -16,12 +16,12 @@ export const submissionService = {
     },
 
     async getSubmission(filename: string): Promise<string> {
-        return apiGet<string>(`/submissions/${filename}`);
+        return apiGet<string>(`/submissions/${encodeURIComponent(filename)}`);
     },
 
     async saveSubmission(filename: string, criteria: Criterion[]): Promise<void> {
         return apiPatch<void>(
-            `/submissions/${filename}`,
+            `/submissions/${encodeURIComponent(filename)}`,
             JSON.stringify(criteria),
             'application/json'
         );

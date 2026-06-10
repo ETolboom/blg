@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'toggleHighlight': [index: number, problematicElements: string[]];
-  'editCriterion': [criterion: any];
+  'editCriterion': [criterion: Criterion];
   'delete': [];
 }>();
 
@@ -52,7 +52,10 @@ const innerCriteria = computed(() =>
     category: CheckComplexity.COMPLEX,
     id: result.rule_id,
     name: result.rule_name,
-    problematic_elements: result.match_details?.map(m => m.bpmn_element_id) || []
+    // Prefer the persisted per-rule list; fall back to mining match_details
+    // (present only on the live validate/analyze response).
+    problematic_elements:
+      result.problematic_elements ?? result.match_details?.map(m => m.bpmn_element_id) ?? []
   }))
 );
 
@@ -76,6 +79,20 @@ const bestRuleName = computed(() => {
   if (!bestRuleId.value) return undefined;
   const bestRule = ruleResults.value.find(r => r.rule_id === bestRuleId.value);
   return bestRule ? `Max points derived from rule: ${bestRule.rule_name}` : undefined;
+});
+
+// Editing an inner rule opens its behavior editor; handleEditCriterion only
+// reads id + check_complexity, but we return a full Criterion so the emit is
+// typed rather than `any`.
+const toEditCriterion = (item: (typeof innerCriteria.value)[number]): Criterion => ({
+  id: item.id,
+  name: item.name,
+  description: item.description ?? '',
+  check_complexity: CheckComplexity.COMPLEX,
+  fulfilled: item.state,
+  default_points: item.points,
+  score: null,
+  problematic_elements: item.problematic_elements,
 });
 </script>
 
@@ -120,7 +137,7 @@ const bestRuleName = computed(() => {
         class="border-gray-200"
         :class="{'border-l-4 border-l-yellow-400': isXor && item.id === bestRuleId}"
         :is-editable="isEditable"
-        @edit="emit('editCriterion', { check_complexity: CheckComplexity.COMPLEX, ...item })"
+        @edit="emit('editCriterion', toEditCriterion(item))"
         @click="emit('toggleHighlight', -1, item.problematic_elements)" 
       />
       <!-- Note: ToggleHighlight index -1 is a placeholder... -->

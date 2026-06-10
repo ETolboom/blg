@@ -2,26 +2,27 @@
 import {Check, Edit, ExternalLink, Split, XIcon, Trash2} from "lucide-vue-next";
 import {computed, ref} from "vue";
 import {CheckComplexity} from "@/features/rubric/types/check_complexity.ts";
+import type {Criterion} from "@/features/rubric/types/rubric";
+import {isGroup as isGroupCriterion} from "@/features/behavior/types/group";
 
 const emit = defineEmits(['toggle', 'reset', 'updatePoints', 'edit', 'delete']);
 
-const props = defineProps({
-  "title": String,
-  "description": String,
-  "state": [Boolean, null],
-  "points": Number,
-  "custom_score_set": Boolean,
-  "category": String as () => CheckComplexity,
-  "criterion": Object,
-  "isEditable": {
-    type: Boolean,
-    default: true
-  }
+const props = withDefaults(defineProps<{
+  title?: string;
+  description?: string;
+  state?: boolean | null;
+  points?: number;
+  custom_score_set?: boolean;
+  category?: CheckComplexity;
+  criterion?: Criterion;
+  isEditable?: boolean;
+}>(), {
+  isEditable: true
 });
 
-const isGroup = computed(() => {
-  return props.criterion?.condition === 'XOR' || props.criterion?.condition === 'AND';
-});
+// Canonical "is this a group" predicate: the `group:` id prefix (see group.ts),
+// not the condition field, so it agrees with RubricSidebar's routing.
+const isGroup = computed(() => isGroupCriterion(props.criterion ?? {}));
 
 const expanded = ref(false);
 

@@ -115,6 +115,9 @@ function handleLabelKeydown(event: KeyboardEvent): void {
     event.preventDefault();
     finishEditingLabel()
   } else if (event.key === 'Escape') {
+    // Reset to the original before the @blur handler fires finishEditingLabel,
+    // so Escape cancels the edit instead of committing it (matches NoteNode).
+    editingLabelValue.value = label.value;
     isEditingLabel.value = false
   }
 }

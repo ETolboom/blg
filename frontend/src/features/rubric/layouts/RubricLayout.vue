@@ -2,7 +2,7 @@
 import {nextTick, onMounted, ref, watch} from "vue";
 import {useToast} from "primevue";
 import _ from "lodash";
-import {type Check, checkService, ApiError, rubricService, behavioralRuleService} from "@/services";
+import {type Check, checkService, rubricService, behavioralRuleService, toastError, toastSuccess} from "@/services";
 import RubricSidebar from "@/features/rubric/components/RubricSidebar.vue";
 import RubricAlgorithmDialog from "@/features/rubric/components/RubricAlgorithmDialog.vue";
 import {Criterion, Rubric} from "@/features/rubric/types/rubric";
@@ -53,7 +53,7 @@ const calculateScore = (): void => {
 
   totalScore.value = total;
   correctScore.value = correct;
-  correctPercentage.value = ((correct / total) * 100).toFixed(2);
+  correctPercentage.value = total > 0 ? ((correct / total) * 100).toFixed(2) : "0.00";
 };
 
 const toggleState = (index: number): void => {
@@ -112,11 +112,7 @@ const fetchAvailableChecks = async (): Promise<void> => {
   try {
     availableChecks.value = await checkService.getChecks();
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Could not load checks', detail: error.detail});
-    } else {
-      toast.add({severity: 'error', summary: 'Could not load checks', detail: String(error)});
-    }
+    toastError(toast, 'Could not load checks', error);
   }
 };
 
@@ -125,11 +121,7 @@ const fetchAvailableRules = async (): Promise<void> => {
   try {
     availableRules.value = await behavioralRuleService.getBehavioralRules();
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Could not load rules', detail: error.detail});
-    } else {
-      toast.add({severity: 'error', summary: 'Could not load rules', detail: String(error)});
-    }
+    toastError(toast, 'Could not load rules', error);
     availableRules.value = [];
   } finally {
     isLoadingRules.value = false;
@@ -140,11 +132,7 @@ const fetchAvailableTemplates = async (): Promise<void> => {
   try {
     availableTemplates.value = await behavioralRuleService.getBehavioralRuleTemplates();
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Could not load templates', detail: error.detail});
-    } else {
-      toast.add({severity: 'error', summary: 'Could not load templates', detail: String(error)});
-    }
+    toastError(toast, 'Could not load templates', error);
     availableTemplates.value = [];
   }
 };
@@ -211,11 +199,7 @@ const handleSaveRubric = async (check: Check): Promise<void> => {
     addDialogVisible.value = false;
     editingCheck.value = null;
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Rubric', detail: error.detail, life: 10000});
-    } else {
-      toast.add({severity: 'error', summary: 'Rubric', detail: String(error), life: 10000});
-    }
+    toastError(toast, 'Rubric', error, { life: 10000 });
   }
 };
 
@@ -229,11 +213,7 @@ const handleNewBehavorialRule = async (rule: BehavioralRule): Promise<void> => {
     // Navigate to behavior editor with rule ID
     window.open(`/behavior/${rule.id}`, '_blank');
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Rubric', detail: error.detail, life: 10000});
-    } else {
-      toast.add({severity: 'error', summary: 'Rubric', detail: String(error), life: 10000});
-    }
+    toastError(toast, 'Rubric', error, { life: 10000 });
   }
 };
 
@@ -252,11 +232,7 @@ const handleSaveGroup = async (group: BehavioralRuleGroup): Promise<void> => {
     
     groupAddDialogVisible.value = false;
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Rubric', detail: error.detail, life: 10000});
-    } else {
-      toast.add({severity: 'error', summary: 'Rubric', detail: String(error), life: 10000});
-    }
+    toastError(toast, 'Rubric', error, { life: 10000 });
   }
 };
 
@@ -273,13 +249,8 @@ const handleDeleteCriterion = async (criterionId: string): Promise<void> => {
     const rubric = await rubricService.getRubric();
     emit("updateRubric", rubric);
     
-    toast.add({
-      severity: 'success', 
-      summary: 'Rubric', 
-      detail: data.message, 
-      life: 5000
-    });
-    
+    toastSuccess(toast, 'Rubric', data, { life: 5000 });
+
     if (data.unmerged_rules && data.unmerged_rules.length > 0) {
       toast.add({
         severity: 'info',
@@ -299,11 +270,7 @@ const handleDeleteCriterion = async (criterionId: string): Promise<void> => {
     }
     
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({severity: 'error', summary: 'Rubric', detail: error.detail, life: 10000});
-    } else {
-      toast.add({severity: 'error', summary: 'Rubric', detail: String(error), life: 10000});
-    }
+    toastError(toast, 'Rubric', error, { life: 10000 });
   }
 };
 
@@ -318,8 +285,8 @@ const handleEditCriterion = (criterion: Criterion): void => {
         : `/behavior/${criterion.id}`;
     window.open(url, '_blank');
   } else {
-    // It's a check criterion, open the edit dialog
-    editingCheck.value = criterion as unknown as Check;
+    // It's a check criterion, open the edit dialog (a Criterion is a Check).
+    editingCheck.value = criterion;
     addDialogType.value = criterion.check_complexity;
     addDialogVisible.value = true;
   }
@@ -354,7 +321,7 @@ onMounted(() => {
       v-model:visible="addDialogVisible"
       :available-checks="availableChecks"
       :category="addDialogType"
-      :existing-criteria="(criteria.filter(c => c.check_complexity !== CheckComplexity.COMPLEX) as unknown as Check[])"
+      :existing-criteria="criteria.filter(c => c.check_complexity !== CheckComplexity.COMPLEX)"
       :editing-check="editingCheck"
       @save="handleSaveRubric"
   />

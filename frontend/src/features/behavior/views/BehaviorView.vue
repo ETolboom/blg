@@ -16,7 +16,7 @@ import useDragAndDrop from '@/features/behavior/composables/useDragAndDrop.ts'
 import {useFlowHistory} from '@/features/behavior/composables/useFlowHistory.ts'
 import {Background} from '@vue-flow/background'
 import {getDefaultNodeData, isConnectionAllowed, NODE_TYPES, type NodeType} from '@/features/behavior/types/nodeRegistry.ts'
-import {ApiError, behavioralRuleService} from "@/services"
+import {behavioralRuleService, toastError} from "@/services"
 import type {ValidationResponse, NodeValidationState} from '@/features/behavior/types/validation'
 import type {BehavioralRule} from '@/features/behavior/types/template'
 
@@ -40,7 +40,7 @@ const autoSaveTimeout = ref<ReturnType<typeof setTimeout> | null>(null);
 const isLoaded = ref<boolean>(false);
 const historyDebounce = ref<ReturnType<typeof setTimeout> | null>(null);
 
-const {isRestoring, canUndo, canRedo, pushState, undo, redo} = useFlowHistory(nodes, edges);
+const {isRestoring, pushState, undo, redo} = useFlowHistory(nodes, edges);
 
 const ruleId = computed(() => route.params.ruleId as string | undefined);
 const submissionFilename = computed(() => route.query.submission as string | undefined);
@@ -172,21 +172,7 @@ const runFlow = async () => {
       });
     }
   } catch (error) {
-    if (error instanceof ApiError) {
-      toast.add({
-        severity: 'error',
-        summary: 'Validation failed',
-        detail: error.detail,
-        life: 10000
-      });
-    } else {
-      toast.add({
-        severity: 'error',
-        summary: 'Validation failed',
-        detail: String(error),
-        life: 10000
-      });
-    }
+    toastError(toast, 'Validation failed', error, { life: 10000 });
     console.error('Validation error:', error);
   } finally {
     isValidating.value = false;
@@ -233,22 +219,8 @@ const saveFlow = async (showToast: boolean = true) => {
   } catch (error) {
     // If save fails, mark as unsaved again so user knows/auto-save can retry
     hasUnsavedChanges.value = true;
-    
-    if (error instanceof ApiError) {
-      toast.add({
-        severity: 'error',
-        summary: 'Save failed',
-        detail: error.detail,
-        life: 10000
-      });
-    } else {
-      toast.add({
-        severity: 'error',
-        summary: 'Save failed',
-        detail: String(error),
-        life: 10000
-      });
-    }
+
+    toastError(toast, 'Save failed', error, { life: 10000 });
   } finally {
     isSaving.value = false;
   }
@@ -370,13 +342,7 @@ onMounted(async () => {
       await nextTick();
       edges.value = currentRule.value.edges || [];
     } catch (error) {
-      if (error instanceof ApiError) {
-        toast.add({
-          severity: 'error',
-          summary: 'Rule not found',
-          detail: error.detail
-        });
-      }
+      toastError(toast, 'Rule not found', error);
       // Fall back to empty editor
       currentRule.value = null;
     }

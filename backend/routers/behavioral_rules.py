@@ -14,6 +14,7 @@ from dependencies import (
     recompute_reference_eval,
 )
 from rules.manager import BehavioralRule, BehavioralRuleManager
+from schemas import MessageResponse
 from services.submissions import SubmissionService
 
 router = APIRouter()
@@ -53,12 +54,7 @@ async def get_templates(
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
 ) -> list[dict]:
     """List all available rule templates"""
-    try:
-        return rule_manager.list_templates()
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list templates: {str(e)}"
-        )
+    return rule_manager.list_templates()
 
 
 @router.get("/behavioral-rules")
@@ -66,10 +62,7 @@ async def get_rules(
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
 ) -> list[dict]:
     """List all available rules"""
-    try:
-        return rule_manager.list_rules()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list rules: {str(e)}")
+    return rule_manager.list_rules()
 
 
 @router.get("/behavioral-rules/{rule_id}")
@@ -77,17 +70,12 @@ async def get_rule(
     rule_id: str, rule_manager: BehavioralRuleManager = Depends(get_rule_manager)
 ) -> BehavioralRule:
     """Get a specific rule by ID"""
-    try:
-        rule = rule_manager.get_rule(rule_id)
+    rule = rule_manager.get_rule(rule_id)
 
-        if rule is None:
-            raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
+    if rule is None:
+        raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
 
-        return rule
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get rule: {str(e)}")
+    return rule
 
 
 @router.post("/behavioral-rules")
@@ -96,19 +84,14 @@ async def create_rule(
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
 ) -> BehavioralRule:
     """Create a new behavioral rule."""
-    try:
-        # Check if rule already exists
-        if rule_manager.rule_exists(rule.id):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Rule with ID '{rule.id}' already exists. Use PUT to update.",
-            )
+    # Check if rule already exists
+    if rule_manager.rule_exists(rule.id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Rule with ID '{rule.id}' already exists. Use PUT to update.",
+        )
 
-        return rule_manager.save_rule(rule)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create rule: {str(e)}")
+    return rule_manager.save_rule(rule)
 
 
 @router.put("/behavioral-rules/{rule_id}")
@@ -118,42 +101,32 @@ async def update_rule(
     rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
 ) -> BehavioralRule:
     """Update an existing behavioral rule."""
-    try:
-        # Ensure the rule ID in the URL matches the one in the body
-        if rule.id != rule_id:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Rule ID in URL ('{rule_id}') doesn't match ID in body ('{rule.id}')",
-            )
+    # Ensure the rule ID in the URL matches the one in the body
+    if rule.id != rule_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rule ID in URL ('{rule_id}') doesn't match ID in body ('{rule.id}')",
+        )
 
-        # Check if rule exists
-        if not rule_manager.rule_exists(rule_id):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Rule '{rule_id}' not found. Use POST to create.",
-            )
+    # Check if rule exists
+    if not rule_manager.rule_exists(rule_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Rule '{rule_id}' not found. Use POST to create.",
+        )
 
-        return rule_manager.save_rule(rule)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update rule: {str(e)}")
+    return rule_manager.save_rule(rule)
 
 
 @router.delete("/behavioral-rules/{rule_id}")
 async def delete_rule(
     rule_id: str, rule_manager: BehavioralRuleManager = Depends(get_rule_manager)
-) -> dict:
+) -> MessageResponse:
     """Delete a behavioral rule by ID."""
-    try:
-        if not rule_manager.delete_rule(rule_id):
-            raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
+    if not rule_manager.delete_rule(rule_id):
+        raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
 
-        return {"message": f"Rule '{rule_id}' deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete rule: {str(e)}")
+    return MessageResponse(message=f"Rule '{rule_id}' deleted successfully")
 
 
 @router.post("/behavioral-rules/{rule_id}/validate")
@@ -175,75 +148,66 @@ async def validate_rule(
     # rubric is optional here: only the reference branch needs it.
     rubric = request.app.state.rubric
 
-    try:
-        # Get the rule
-        rule = rule_manager.get_rule(rule_id)
+    # Get the rule
+    rule = rule_manager.get_rule(rule_id)
 
-        if rule is None:
-            raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
+    if rule is None:
+        raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")
 
-        # Resolve the BPMN XML to evaluate against
-        if filename is not None:
-            submission_path = os.path.join(base_path, "submissions", filename)
-            if not os.path.exists(submission_path):
-                raise HTTPException(
-                    status_code=404, detail=f"Submission '{filename}' not found"
-                )
-            with open(submission_path, encoding="utf-8") as f:
-                model_xml = f.read()
-        else:
-            if (
-                not rubric
-                or not rubric.assignment
-                or not rubric.assignment.reference_xml
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="No reference BPMN model loaded. Please load a rubric first.",
-                )
-            model_xml = rubric.assignment.reference_xml
+    # Resolve the BPMN XML to evaluate against
+    if filename is not None:
+        submission_path = os.path.join(base_path, "submissions", filename)
+        if not os.path.exists(submission_path):
+            raise HTTPException(
+                status_code=404, detail=f"Submission '{filename}' not found"
+            )
+        with open(submission_path, encoding="utf-8") as f:
+            model_xml = f.read()
+    else:
+        if not rubric or not rubric.assignment or not rubric.assignment.reference_xml:
+            raise HTTPException(
+                status_code=400,
+                detail="No reference BPMN model loaded. Please load a rubric first.",
+            )
+        model_xml = rubric.assignment.reference_xml
 
-        # Convert rule to WorkflowData
-        workflow_data = WorkflowData(nodes=rule.nodes, edges=rule.edges)
+    # Convert rule to WorkflowData
+    workflow_data = WorkflowData(nodes=rule.nodes, edges=rule.edges)
 
-        # Run behavioral analysis
-        checker = BehavioralRuleCheck(model_xml=model_xml)
-        result = checker.check_behavior(workflow=workflow_data)
+    # Run behavioral analysis
+    checker = BehavioralRuleCheck(model_xml=model_xml)
+    result = checker.check_behavior(workflow=workflow_data)
 
-        affected_groups: list[AffectedGroup] = []
+    affected_groups: list[AffectedGroup] = []
 
-        if filename is None:
-            # Validating against the reference: the rule definition on disk may
-            # have just changed, so recompute the whole reference evaluation
-            # (this rule + any groups containing it) and invalidate cached
-            # submission evaluations. Nothing is written into the rubric
-            # definition or group files anymore.
-            recompute_reference_eval(request.app)
-            submission_service.invalidate_all_results()
+    if filename is None:
+        # Validating against the reference: the rule definition on disk may
+        # have just changed, so recompute the whole reference evaluation
+        # (this rule + any groups containing it) and invalidate cached
+        # submission evaluations. Nothing is written into the rubric
+        # definition or group files anymore.
+        recompute_reference_eval(request.app)
+        submission_service.invalidate_all_results()
 
-            for group_info in rule_manager.list_groups():
-                if rule_id in group_info.get("rule_ids", []):
-                    affected_groups.append(
-                        AffectedGroup(
-                            group_id=group_info["group_id"],
-                            group_name=group_info["name"],
-                        )
+        for group_info in rule_manager.list_groups():
+            if rule_id in group_info.get("rule_ids", []):
+                affected_groups.append(
+                    AffectedGroup(
+                        group_id=group_info["group_id"],
+                        group_name=group_info["name"],
                     )
+                )
 
-        return RuleValidationResponse(
-            rule_id=rule_id,
-            rule_name=rule.name,
-            validation_result=ValidationResult(
-                fulfilled=result.fulfilled,
-                confidence=result.confidence,
-                total_matches=result.total_matches,
-                earned_points=result.earned_points,
-                match_details=result.match_details,
-                problematic_elements=result.problematic_elements,
-            ),
-            affected_groups=affected_groups,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"{str(e)}")
+    return RuleValidationResponse(
+        rule_id=rule_id,
+        rule_name=rule.name,
+        validation_result=ValidationResult(
+            fulfilled=result.fulfilled,
+            confidence=result.confidence,
+            total_matches=result.total_matches,
+            earned_points=result.earned_points,
+            match_details=result.match_details,
+            problematic_elements=result.problematic_elements,
+        ),
+        affected_groups=affected_groups,
+    )

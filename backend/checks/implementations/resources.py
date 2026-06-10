@@ -5,10 +5,10 @@ from checks import (
     Check,
     CheckComplexity,
     CheckFormInput,
-    CheckInputType,
     CheckKeyValuePair,
     CheckKeyValueType,
     CheckResult,
+    KeyValueFormInput,
 )
 from bpmn.bpmn import get_bpmn
 from utils import get_elements_by_type
@@ -29,9 +29,8 @@ class PoolLaneCheck(Check):
     key_label: ClassVar[str] = "Pool name"
     value_label: ClassVar[str] = "Lane name"
     input_scheme: ClassVar[list[CheckFormInput]] = [
-        CheckFormInput(
+        KeyValueFormInput(
             input_label="Pools and lanes",
-            input_type=CheckInputType.KEY_VALUE,
             data=CheckKeyValueType(
                 key_label=key_label, value_label=value_label, pairs=[]
             ),
@@ -49,9 +48,8 @@ class PoolLaneCheck(Check):
                 raise Exception("No pools found")
 
             inputs.append(
-                CheckFormInput(
+                KeyValueFormInput(
                     input_label="Pool(s) and Lane(s)",
-                    input_type=CheckInputType.KEY_VALUE,
                     multiple=True,
                     data=CheckKeyValueType(
                         key_label=self.key_label,
@@ -91,12 +89,14 @@ class PoolLaneCheck(Check):
         submission_pools = [pool[0] for pool in pools if pool[0] is not None]
 
         reference_pools: list[str] = []
+        reference_pairs: list[CheckKeyValuePair] = []
 
-        v: CheckFormInput
         for v in inputs:
-            # TODO: Improper typing
+            if not isinstance(v, KeyValueFormInput):
+                continue
             for pool in v.data.pairs:
                 reference_pools.append(pool.key)
+                reference_pairs.append(pool)
 
         if reference_pools and not submission_pools:
             return CheckResult(
@@ -127,7 +127,7 @@ class PoolLaneCheck(Check):
                 task.name for task in model.pools[submission_idx].lanes
             ]
 
-            reference_lane_labels: list[str] = inputs[0].data.pairs[reference_idx].value
+            reference_lane_labels: list[str] = reference_pairs[reference_idx].value
 
             if not reference_lane_labels:
                 # Pool with no expected lanes (e.g. closed/black-box pool) — nothing to check.

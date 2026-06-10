@@ -78,6 +78,7 @@ function handleLabelKeydown(event: KeyboardEvent): void {
     event.preventDefault();
     finishEditingLabel()
   } else if (event.key === 'Escape') {
+    editingLabelValue.value = label.value;
     isEditingLabel.value = false
   }
 }

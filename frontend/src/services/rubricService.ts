@@ -1,13 +1,7 @@
 import { apiGet, apiPost, apiPut, apiDelete } from './api';
-import type { Assignment, Rubric, Criterion } from "@/features/rubric/types/rubric";
+import type { Assignment, Rubric } from "@/features/rubric/types/rubric";
 import type { Check } from "@/services/checkService";
 import { BehavioralRule } from "@/features/behavior/types/template.ts";
-
-// The backend may return check_complexity as a number (0/1/2) even though our
-// enum is now string-based. Normalize here so all comparisons work correctly.
-const normalizeCriteria = (criteria: Criterion[]): Criterion[] =>
-    criteria.map(c => ({ ...c, check_complexity: String(c.check_complexity) as any }));
-
 
 export interface CreateRubricRequest {
     assignment: Assignment;
@@ -22,9 +16,7 @@ export interface DeleteCriterionResponse {
 
 export const rubricService = {
     async getRubric(): Promise<Rubric> {
-        const rubric = await apiGet<Rubric>('/rubric');
-        rubric.criteria = normalizeCriteria(rubric.criteria);
-        return rubric;
+        return apiGet<Rubric>('/rubric');
     },
 
     async createRubric(request: CreateRubricRequest): Promise<Rubric> {

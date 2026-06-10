@@ -18,21 +18,10 @@ export interface BehavioralRuleGroup {
     problematic_elements?: string[] | null;  // BPMN element IDs with issues
 }
 
-export interface MatchDetail {
-    workflow_node_id: string;
-    workflow_label: string;
-    bpmn_element_id: string;
-    bpmn_label: string;
-    match_score: number;
-    distance: number;
-    ideal_distance: number;
-    max_distance: number;
-    minimal_match_threshold: number;
-    ideal_match_threshold: number;
-    is_correct: boolean;
-    is_ideal_distance: boolean;
-    is_ideal_match: boolean;
-}
+// Single source of truth lives in validation.ts; re-exported here so existing
+// imports from this module keep working.
+export type { MatchDetail } from "@/features/behavior/types/validation";
+import type { MatchDetail } from "@/features/behavior/types/validation";
 
 export interface RuleEvaluationResult {
     rule_id: string;
@@ -40,7 +29,10 @@ export interface RuleEvaluationResult {
     description?: string;
     earned_points: number;
     confidence: number;
-    match_details: MatchDetail[];
+    // Present on the live validate/analyze response, but NOT on the persisted
+    // per-model group summary (which carries `problematic_elements` instead).
+    match_details?: MatchDetail[];
+    problematic_elements?: string[];
     success: boolean;
 }
 

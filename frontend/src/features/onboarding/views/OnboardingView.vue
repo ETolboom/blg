@@ -9,7 +9,7 @@ import Button from "primevue/button";
 import Step from 'primevue/step';
 import StepPanel from 'primevue/steppanel';
 import {checkService, type AnalysisNode, rubricService} from "@/services";
-import { CheckComplexity, CheckComplexityLabels } from "@/features/rubric/types/check_complexity";
+import { CheckComplexityLabels, isCheckComplexity } from "@/features/rubric/types/check_complexity";
 
 const emit = defineEmits<{
   onboarded: []
@@ -64,12 +64,13 @@ const analyzeFile = async (): Promise<void> => {
   try {
     const rawNodes = await checkService.analyzeFile(fileInput.value.files[0]);
     nodes.value = rawNodes.map(node => {
-      if (node.data.name in CheckComplexityLabels) {
+      // Category nodes carry a CheckComplexity value as their name; relabel them.
+      if (isCheckComplexity(node.data.name)) {
         return {
           ...node,
           data: {
             ...node.data,
-            name: CheckComplexityLabels[node.data.name as CheckComplexity]
+            name: CheckComplexityLabels[node.data.name]
           }
         };
       }

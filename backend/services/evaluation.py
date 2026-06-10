@@ -1,11 +1,3 @@
-"""Shared model-evaluation logic.
-
-A single `evaluate_model` runs the full rubric (standard checks + individual
-behavioral rules + groups) against one BPMN model and returns a
-`SubmissionResult`. Both student submissions and the reference model go through
-this path, so the reference is "just another evaluated model".
-"""
-
 import logging
 
 from checks import CheckComplexity
@@ -93,6 +85,7 @@ def evaluate_model(
                         earned_points=r.earned_points,
                         confidence=r.confidence,
                         success=r.success,
+                        problematic_elements=_problematic_from_matches(r.match_details),
                     )
                     for r in g.rule_results
                 ],

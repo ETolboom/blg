@@ -30,13 +30,12 @@ export interface ValidationResult {
 }
 
 /**
- * Group affected by re-evaluation
+ * Group affected by re-evaluation. Mirrors the backend AffectedGroup, which
+ * sends only the identifier and name (no scores).
  */
 export interface AffectedGroup {
   group_id: string;
   group_name: string;
-  earned_points: number;
-  best_rule: string;
 }
 
 /**

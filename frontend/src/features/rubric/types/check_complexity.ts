@@ -11,3 +11,8 @@ export const CheckComplexityLabels: Record<CheckComplexity, string> = {
 };
 
 export type CheckComplexityType = CheckComplexity;
+
+/** Narrow an arbitrary string to a CheckComplexity enum value. */
+export function isCheckComplexity(value: string): value is CheckComplexity {
+    return value in CheckComplexityLabels;
+}

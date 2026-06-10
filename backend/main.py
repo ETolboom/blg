@@ -4,10 +4,13 @@ import sys
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 from checks.manager import CheckRegistry
+from schemas import ErrorResponse
 from routers import projects, submissions, rubric
 from routers import checks as checks_router
 from routers import behavioral_rules, behavioral_rule_groups
@@ -43,6 +46,41 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+
+# Centralized exception handling: map common domain errors to the right status
+# code and always return FastAPI's `{detail: "<string>"}` shape so the frontend
+# can present clean messages. Unexpected errors are logged server-side and
+# reported generically rather than leaking `str(e)` (internal paths, etc.).
+# (HTTPException and request-body validation keep FastAPI's default handlers.)
+def _error_response(status_code: int, detail: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code, content=ErrorResponse(detail=detail).model_dump()
+    )
+
+
+@app.exception_handler(FileNotFoundError)
+async def _file_not_found_handler(request: Request, exc: FileNotFoundError):
+    return _error_response(404, str(exc))
+
+
+@app.exception_handler(ValueError)
+async def _value_error_handler(request: Request, exc: ValueError):
+    return _error_response(400, str(exc))
+
+
+@app.exception_handler(ValidationError)
+async def _validation_error_handler(request: Request, exc: ValidationError):
+    return _error_response(422, str(exc))
+
+
+@app.exception_handler(Exception)
+async def _unhandled_error_handler(request: Request, exc: Exception):
+    logger.exception(
+        "Unhandled error processing %s %s", request.method, request.url.path
+    )
+    return _error_response(500, "Internal server error")
+
+
 app.include_router(projects.router, prefix="/api", tags=["projects"])
 app.include_router(submissions.router, prefix="/api", tags=["submissions"])
 app.include_router(rubric.router, prefix="/api", tags=["rubric"])
@@ -57,16 +95,24 @@ if os.path.isdir(_FRONTEND_DIR):
     from fastapi.responses import FileResponse
 
     # Mount the static directory itself to serve JS, CSS, images (if any match)
-    app.mount("/assets", StaticFiles(directory=os.path.join(_FRONTEND_DIR, "assets")), name="assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(_FRONTEND_DIR, "assets")),
+        name="assets",
+    )
 
     # Serve the favicon directly
     @app.get("/favicon.ico", include_in_schema=False)
     async def get_favicon():
         return FileResponse(os.path.join(_FRONTEND_DIR, "favicon.ico"))
 
-    # Catch-all route to serve the SPA's index.html for any unhandled routes
+    # Catch-all route to serve the SPA's index.html for any unhandled routes.
+    # Exclude the /api prefix so an unmatched API path returns a real 404 rather
+    # than HTML with status 200 (misleading for a mistyped/removed endpoint).
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(os.path.join(_FRONTEND_DIR, "index.html"))
 
 
@@ -95,5 +141,8 @@ if __name__ == "__main__":
     # Set data_root before lifespan runs
     app.state.data_root = data_root
 
-    # logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(
+        level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     uvicorn.run(app, host="0.0.0.0", port=8000)

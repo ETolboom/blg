@@ -1,7 +1,7 @@
 import torch
 from typing import ClassVar
 
-from checks import Check, CheckComplexity, CheckFormInput, CheckInputType, CheckResult
+from checks import Check, CheckComplexity, CheckFormInput, CheckResult, StringFormInput
 from utils import extract_all_tasks, ExtractedTask
 from utils.similarity import create_similarity_matrix
 
@@ -29,9 +29,8 @@ class TaskCoverageCheck(Check):
         if inputs is None:
             # Use self.model_xml as the reference — extract task labels and return as inputs
             reference_inputs = [
-                CheckFormInput(
+                StringFormInput(
                     input_label=task.name,
-                    input_type=CheckInputType.STRING,
                     data=task.name,
                 )
                 for task in tasks

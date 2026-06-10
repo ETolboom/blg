@@ -18,7 +18,7 @@ class CheckRegistry:
 
     def _load_check_dependencies(self) -> None:
         """Load dependencies for all registered check classes."""
-        print("\nLoading check dependencies...")
+        logger.info("Loading check dependencies...")
 
         # Track which dependencies have been loaded to avoid duplicates
         loaded_dependencies: set[str] = set()
@@ -40,7 +40,7 @@ class CheckRegistry:
                     f"Failed to load dependencies for {check_class.name}: {e}"
                 )
 
-        print(f"All check dependencies loaded successfully\n")
+        logger.info("All check dependencies loaded successfully")
 
     def load(self) -> None:
         """Discover and register all concrete Check subclasses from the implementations directory."""

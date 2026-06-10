@@ -34,7 +34,7 @@ class SubmissionService:
         """Return filename and display name for every .bpmn file in the submissions directory."""
         os.makedirs(self.submissions_path, exist_ok=True)
         return [
-            {"filename": f, "name": f.replace(".bpmn", "")}
+            {"filename": f, "name": f.removesuffix(".bpmn")}
             for f in os.listdir(self.submissions_path)
             if f.endswith(".bpmn")
         ]
@@ -144,7 +144,7 @@ class SubmissionService:
                 f.write(content)
 
             uploaded.append(
-                {"filename": file.filename, "name": file.filename.replace(".bpmn", "")}
+                {"filename": file.filename, "name": file.filename.removesuffix(".bpmn")}
             )
 
         return uploaded

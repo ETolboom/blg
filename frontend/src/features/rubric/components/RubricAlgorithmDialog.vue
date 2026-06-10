@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import {ref, watch} from "vue";
 import {Button, Dialog, InputText, Select} from "primevue";
-import type {Check, CheckKeyValueType, CheckSelectionType} from "@/services";
+import type {Check, CheckInput} from "@/services";
 import {CheckComplexity} from "@/features/rubric/types/check_complexity.ts";
 
 const props = defineProps<{
@@ -20,59 +20,55 @@ const emit = defineEmits<{
 const selectedCheck = ref<Check | null>(null);
 const workingCheck = ref<Check | null>(null);
 
+const inputAt = (configIndex: number): CheckInput | undefined =>
+    workingCheck.value?.inputs?.[configIndex];
+
 const addKeyValueItem = (configIndex: number): void => {
-  if (!workingCheck.value?.inputs?.[configIndex]?.data) return;
-  const data = workingCheck.value.inputs[configIndex].data as any;
-  if (data.pairs) {
-    data.pairs.push({key: '', value: ['']});
-  }
+  const input = inputAt(configIndex);
+  if (input?.input_type !== 'key-value') return;
+  input.data.pairs.push({key: '', value: ['']});
 };
 
 const removeKeyValueItem = (configIndex: number, itemIndex: number): void => {
-  if (!workingCheck.value?.inputs?.[configIndex]?.data) return;
-  const data = workingCheck.value.inputs[configIndex].data as any;
-  if (data.pairs && data.pairs.length > 1) {
-    data.pairs.splice(itemIndex, 1);
+  const input = inputAt(configIndex);
+  if (input?.input_type !== 'key-value') return;
+  if (input.data.pairs.length > 1) {
+    input.data.pairs.splice(itemIndex, 1);
   }
 };
 
 const addStringItem = (configIndex: number): void => {
-  if (!workingCheck.value?.inputs?.[configIndex]?.data) return;
-  const data = workingCheck.value.inputs[configIndex].data as unknown as any[];
-  if (Array.isArray(data)) {
-    data.push('');
-  }
+  const input = inputAt(configIndex);
+  if (input?.input_type !== 'string' || !Array.isArray(input.data)) return;
+  input.data.push('');
 };
 
 const addValueItem = (configIndex: number, itemIndex: number): void => {
-  if (!workingCheck.value?.inputs?.[configIndex]?.data) return;
-  const data = workingCheck.value.inputs[configIndex].data as any;
-  if (data.pairs?.[itemIndex]?.value) {
-    data.pairs[itemIndex].value.push('');
-  }
+  const input = inputAt(configIndex);
+  if (input?.input_type !== 'key-value') return;
+  input.data.pairs[itemIndex]?.value.push('');
 };
 
 const removeValueItem = (configIndex: number, itemIndex: number, valueIndex: number): void => {
-  if (!workingCheck.value?.inputs?.[configIndex]?.data) return;
-  const data = workingCheck.value.inputs[configIndex].data as any;
-  if (data.pairs?.[itemIndex]?.value && data.pairs[itemIndex].value.length > 1) {
-    data.pairs[itemIndex].value.splice(valueIndex, 1);
+  const input = inputAt(configIndex);
+  if (input?.input_type !== 'key-value') return;
+  const pair = input.data.pairs[itemIndex];
+  if (pair && pair.value.length > 1) {
+    pair.value.splice(valueIndex, 1);
   }
 };
 
 const addSelectionItem = (configIndex: number): void => {
-  if (!workingCheck.value?.inputs?.[configIndex]?.data) return;
-  const data = workingCheck.value.inputs[configIndex].data as CheckSelectionType;
-  if (data.pairs) {
-    data.pairs.push({label: '', type: ''});
-  }
+  const input = inputAt(configIndex);
+  if (input?.input_type !== 'selection') return;
+  input.data.pairs.push({label: '', type: ''});
 };
 
 const removeSelectionItem = (configIndex: number, itemIndex: number): void => {
-  if (!workingCheck.value?.inputs?.[configIndex]?.data) return;
-  const data = workingCheck.value.inputs[configIndex].data as CheckSelectionType;
-  if (data.pairs && data.pairs.length > 1) {
-    data.pairs.splice(itemIndex, 1);
+  const input = inputAt(configIndex);
+  if (input?.input_type !== 'selection') return;
+  if (input.data.pairs.length > 1) {
+    input.data.pairs.splice(itemIndex, 1);
   }
 };
 
@@ -146,21 +142,17 @@ watch(selectedCheck, (newCheck) => {
 
   if (copy.inputs) {
     copy.inputs.forEach(inputConfig => {
-      if (inputConfig['input_type'] === 'key-value') {
-        inputConfig.data = {
-          pairs: [{key: '', value: ['']}],
-          key_label: inputConfig.key_label || '',
-          value_label: inputConfig.value_label || ''
-        };
-      } else if (inputConfig['input_type'] === 'string') {
-        inputConfig.data = inputConfig.multiple ? ([''] as unknown as CheckKeyValueType) : ('' as unknown as CheckKeyValueType);
-      } else if (inputConfig['input_type'] === 'integer') {
-        inputConfig.data = inputConfig.multiple ? ([0] as unknown as CheckKeyValueType) : (0 as unknown as CheckKeyValueType);
-      } else if (inputConfig['input_type'] === 'selection' && inputConfig.data) {
-        const selectionData = inputConfig.data as CheckSelectionType;
-        // Initialize with one empty pair if pairs doesn't exist or is empty
-        if (!selectionData.pairs || selectionData.pairs.length === 0) {
-          (inputConfig.data as CheckSelectionType).pairs = [{label: '', type: ''}];
+      if (inputConfig.input_type === 'key-value') {
+        // Keep the scheme's labels; just seed one editable pair to start from.
+        inputConfig.data.pairs = [{key: '', value: ['']}];
+      } else if (inputConfig.input_type === 'string') {
+        inputConfig.data = inputConfig.multiple ? [''] : '';
+      } else if (inputConfig.input_type === 'integer') {
+        inputConfig.data = inputConfig.multiple ? [0] : 0;
+      } else if (inputConfig.input_type === 'selection') {
+        // Initialize with one empty pair if pairs is empty
+        if (inputConfig.data.pairs.length === 0) {
+          inputConfig.data.pairs = [{label: '', type: ''}];
         }
       }
     });
@@ -194,14 +186,14 @@ watch(selectedCheck, (newCheck) => {
       </div>
       <div v-for="(inputConfig, configIndex) in workingCheck.inputs" v-else :key="'form-container-' + configIndex"
            class="mb-4">
-        <div v-if="inputConfig['input_type'] === 'key-value' && inputConfig.data">
+        <div v-if="inputConfig.input_type === 'key-value'">
           <label class="font-semibold block mb-2">{{ inputConfig['input_label'] }}</label>
-          <div v-for="(pair, pairIndex) in (inputConfig.data as CheckKeyValueType).pairs" :key="pairIndex"
+          <div v-for="(pair, pairIndex) in inputConfig.data.pairs" :key="pairIndex"
                class="mb-4 p-3 border border-gray-200 rounded-lg relative">
             <div class="flex flex-col gap-3 mb-2">
-              <InputText v-model="pair.key" :placeholder="(inputConfig.data as CheckKeyValueType).key_label" class="flex-auto"/>
+              <InputText v-model="pair.key" :placeholder="inputConfig.data.key_label" class="flex-auto"/>
               <div v-for="(_, valueIndex) in pair.value" :key="valueIndex" class="flex gap-3">
-                <InputText v-model="pair.value[valueIndex]" :placeholder="(inputConfig.data as CheckKeyValueType).value_label"
+                <InputText v-model="pair.value[valueIndex]" :placeholder="inputConfig.data.value_label"
                            class="flex-auto"/>
                 <Button :disabled="pair.value.length <= 1" icon="pi pi-trash" rounded severity="danger" text
                         @click="removeValueItem(configIndex, pairIndex, valueIndex)"></Button>
@@ -212,7 +204,7 @@ watch(selectedCheck, (newCheck) => {
                       @click="addValueItem(configIndex, pairIndex)"></Button>
             </div>
             <div v-if="inputConfig.multiple" class="flex justify-content-end mt-2">
-              <Button :disabled="(inputConfig.data as CheckKeyValueType).pairs.length <= 1" icon="pi pi-trash" label="Remove Pair" severity="danger" text
+              <Button :disabled="inputConfig.data.pairs.length <= 1" icon="pi pi-trash" label="Remove Pair" severity="danger" text
                       @click="removeKeyValueItem(configIndex, pairIndex)"></Button>
             </div>
           </div>
@@ -221,27 +213,27 @@ watch(selectedCheck, (newCheck) => {
                     @click="addKeyValueItem(configIndex)"></Button>
           </div>
         </div>
-        <div v-else-if="inputConfig['input_type'] === 'string' && inputConfig.data">
+        <div v-else-if="inputConfig.input_type === 'string'">
           <label :for="'input-' + configIndex" class="font-semibold block mb-2">{{ inputConfig['input_label'] }}</label>
           <div v-if="inputConfig.multiple && Array.isArray(inputConfig.data)">
             <div v-for="(_, valueIndex) in inputConfig.data" :key="valueIndex" class="flex mb-2 gap-3">
-              <InputText v-model="(inputConfig.data as string[])[valueIndex]" class="flex-auto"></InputText>
-              <Button :disabled="(inputConfig.data as string[]).length <= 1" icon="pi pi-trash" rounded severity="danger" text
-                      @click="(inputConfig.data as string[]).splice(valueIndex, 1)"></Button>
+              <InputText v-model="inputConfig.data[valueIndex]" class="flex-auto"></InputText>
+              <Button :disabled="inputConfig.data.length <= 1" icon="pi pi-trash" rounded severity="danger" text
+                      @click="inputConfig.data.splice(valueIndex, 1)"></Button>
             </div>
             <div class="flex justify-content-end">
               <Button icon="pi pi-plus" label="Add Another" severity="secondary" text
                       @click="addStringItem(configIndex)"></Button>
             </div>
           </div>
-          <div v-else class="flex mb-4 gap-3 rounded-lg relative">
-            <InputText :id="'input-' + configIndex" v-model="inputConfig.data as string"
+          <div v-else-if="!Array.isArray(inputConfig.data)" class="flex mb-4 gap-3 rounded-lg relative">
+            <InputText :id="'input-' + configIndex" v-model="inputConfig.data"
                        class="flex-auto"></InputText>
           </div>
         </div>
-        <div v-else-if="inputConfig['input_type'] === 'selection' && inputConfig.data">
+        <div v-else-if="inputConfig.input_type === 'selection'">
           <label class="font-semibold block mb-2">{{ inputConfig['input_label'] }}</label>
-          <div v-for="(pair, pairIndex) in (inputConfig.data as CheckSelectionType).pairs" :key="pairIndex"
+          <div v-for="(pair, pairIndex) in inputConfig.data.pairs" :key="pairIndex"
                class="mb-4 p-3 border border-gray-200 rounded-lg relative">
             <div class="flex flex-col gap-3">
               <div class="flex items-center gap-2">
@@ -253,8 +245,8 @@ watch(selectedCheck, (newCheck) => {
                 <div class="flex-auto flex flex-col gap-1">
                   <Select
                       v-model="pair.type"
-                      :options="(inputConfig.data as CheckSelectionType).accepted_values"
-                      :placeholder="(inputConfig.data as CheckSelectionType).placeholder"
+                      :options="inputConfig.data.accepted_values"
+                      :placeholder="inputConfig.data.placeholder"
                       :class="{'border-orange-500': pair.type === 'task'}"
                       class="w-full">
                     <template #option="slotProps">
@@ -272,7 +264,7 @@ watch(selectedCheck, (newCheck) => {
               </div>
             </div>
             <div v-if="inputConfig.multiple" class="flex justify-content-end mt-2">
-              <Button :disabled="(inputConfig.data as CheckSelectionType).pairs.length <= 1" icon="pi pi-trash" label="Remove" severity="danger" text
+              <Button :disabled="inputConfig.data.pairs.length <= 1" icon="pi pi-trash" label="Remove" severity="danger" text
                       @click="removeSelectionItem(configIndex, pairIndex)"></Button>
             </div>
           </div>

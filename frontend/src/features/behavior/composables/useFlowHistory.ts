@@ -1,4 +1,4 @@
-import {ref, toRaw, type Ref} from 'vue'
+import {nextTick, ref, toRaw, type Ref} from 'vue'
 import type {Edge, Node} from '@vue-flow/core'
 
 interface HistorySnapshot {
@@ -68,10 +68,11 @@ export function useFlowHistory(
     isRestoring.value = true
     nodesRef.value = snap.nodes
     edgesRef.value = snap.edges
-    // Reset on next tick so VueFlow has time to sync
-    setTimeout(() => {
+    // Reset once Vue Flow has synced. nextTick is render-ordered, unlike a
+    // 0ms setTimeout which only guesses at the sync timing.
+    void nextTick(() => {
       isRestoring.value = false
-    }, 0)
+    })
   }
 
   function undo() {

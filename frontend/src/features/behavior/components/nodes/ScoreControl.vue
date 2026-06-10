@@ -14,6 +14,12 @@ const score = computed({
   set: (value) => emit('update:modelValue', value)
 });
 
+// Round to one decimal so repeated ±0.1 steps don't accumulate IEEE drift
+// (e.g. 0.30000000000000004) in the value that gets persisted.
+const step = (delta: number): void => {
+  score.value = Math.round((props.modelValue + delta) * 10) / 10;
+};
+
 </script>
 
 <template>
@@ -21,13 +27,13 @@ const score = computed({
     <button
         class="px-2 py-1 text-xs font-bold bg-white border-2 border-slate-300 rounded cursor-pointer transition-all hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:border-blue-500"
         type="button"
-        @click="score -= 1">
+        @click="step(-1)">
       -1
     </button>
     <button
         class="px-2 py-1 text-xs font-bold bg-white border-2 border-slate-300 rounded cursor-pointer transition-all hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:border-blue-500"
         type="button"
-        @click="score -= 0.1">
+        @click="step(-0.1)">
       -0.1
     </button>
     <div
@@ -37,13 +43,13 @@ const score = computed({
     <button
         class="px-2 py-1 text-xs font-bold bg-white border-2 border-slate-300 rounded cursor-pointer transition-all hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:border-blue-500"
         type="button"
-        @click="score += 0.1">
+        @click="step(0.1)">
       +0.1
     </button>
     <button
         class="px-2 py-1 text-xs font-bold bg-white border-2 border-slate-300 rounded cursor-pointer transition-all hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:border-blue-500"
         type="button"
-        @click="score += 1">
+        @click="step(1)">
       +1
     </button>
   </div>

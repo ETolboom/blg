@@ -1,13 +1,11 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Callable, ClassVar
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_validator,
-    ValidationInfo,
 )
 
 
@@ -40,52 +38,53 @@ class CheckKeyValueType(BaseModel):
     value_label: str = Field(description="Label for inner list items e.g. Lane-Name")
 
 
-TYPE_MAP: dict[CheckInputType, type] = {
-    CheckInputType.STRING: str,
-    CheckInputType.INTEGER: int,
-    CheckInputType.KEY_VALUE: CheckKeyValuePair,
-    CheckInputType.SELECTION: CheckSelectionType,
-}
+class _FormInputBase(BaseModel):
+    """Shared fields for a check's configurable form input.
 
-
-class CheckFormInput(BaseModel):
-    """This class describes the form elements required for the input for the algorithm."""
+    Concrete inputs are discriminated on ``input_type`` (see ``CheckFormInput``),
+    so each variant carries a correctly-typed ``data`` field. This is what keeps
+    the wire contract type-safe end to end: Pydantic rejects a payload whose
+    ``data`` shape doesn't match its declared ``input_type``, and the frontend
+    mirror (services/checkService.ts) narrows on the same discriminator.
+    """
 
     # Label for the input
     input_label: str
 
-    # Input type e.g. string, number, key-value
-    input_type: CheckInputType
-
-    # Allow multiple inputs of this type
+    # Allow multiple inputs of this type (single string/int -> a list)
     multiple: bool = False
 
-    data: str | int | CheckKeyValueType | CheckSelectionType
 
-    @classmethod
-    @field_validator("data")
-    def _data_matches_declared_type(cls, v: Any, info: ValidationInfo) -> Any:
-        expected_type = TYPE_MAP[info.data["input_type"]]
-        if not isinstance(v, expected_type):
-            raise TypeError(f"Input data must be of type {expected_type.__name__}")
-
-        match v:
-            case str() if not v.strip():  # empty string
-                raise ValueError("String input must not be empty")
-            case CheckKeyValueType() if not v.pairs:  # dict is empty
-                raise ValueError("Key-value input must contain at least one pair")
-            case CheckSelectionType() if not v.accepted_values:
-                raise ValueError(
-                    "Possible selection must contain at least one possible value"
-                )
-
-        return v
+class StringFormInput(_FormInputBase):
+    input_type: Literal[CheckInputType.STRING] = CheckInputType.STRING
+    data: str | list[str]
 
 
-class CheckComplexity(Enum):
-    SIMPLE = 0
-    CONFIGURABLE = 1
-    COMPLEX = 2
+class IntegerFormInput(_FormInputBase):
+    input_type: Literal[CheckInputType.INTEGER] = CheckInputType.INTEGER
+    data: int | list[int]
+
+
+class KeyValueFormInput(_FormInputBase):
+    input_type: Literal[CheckInputType.KEY_VALUE] = CheckInputType.KEY_VALUE
+    data: CheckKeyValueType
+
+
+class SelectionFormInput(_FormInputBase):
+    input_type: Literal[CheckInputType.SELECTION] = CheckInputType.SELECTION
+    data: CheckSelectionType
+
+
+CheckFormInput = Annotated[
+    StringFormInput | IntegerFormInput | KeyValueFormInput | SelectionFormInput,
+    Field(discriminator="input_type"),
+]
+
+
+class CheckComplexity(str, Enum):
+    SIMPLE = "0"
+    CONFIGURABLE = "1"
+    COMPLEX = "2"
 
 
 class CheckResult(BaseModel):

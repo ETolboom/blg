@@ -3,7 +3,7 @@ import {ArrowLeft, ArrowRight, PlusIcon, FileSpreadsheet, Folder} from "lucide-v
 import {Dialog, FileUpload, Select, useToast} from "primevue";
 import type {FileUploadUploaderEvent} from "primevue/fileupload";
 import {onMounted, ref, watch} from "vue";
-import {ApiError, submissionService} from "@/services";
+import {submissionService, toastError} from "@/services";
 import type BpmnModeler from "bpmn-js/lib/Modeler";
 import type Submission from "@/features/grading/types/submission";
 import GradingButton from "@/features/grading/components/GradingButton.vue";
@@ -34,8 +34,7 @@ onMounted(async () => {
     }
   } catch (error) {
     console.error(error);
-    const detail = error instanceof ApiError ? error.detail : 'Could not load list of submissions.';
-    toast.add({severity: 'error', summary: 'Loading failed', detail});
+    toastError(toast, 'Loading failed', error, { fallback: 'Could not load list of submissions.' });
   }
 
   // Register the watcher AFTER the initial assignment so it doesn't fire for it.
@@ -85,8 +84,7 @@ const loadSubmission = async (submission: string) => {
     });
     return diagramXML;
   } catch (error) {
-    const detail = error instanceof ApiError ? error.detail : 'Could not load submission.';
-    toast.add({severity: 'error', summary: 'Loading failed', detail});
+    toastError(toast, 'Loading failed', error, { fallback: 'Could not load submission.' });
     throw error;
   }
 };
@@ -136,8 +134,7 @@ const handleUpload = async (event: FileUploadUploaderEvent) => {
     uploadDialogVisible.value = false;
   } catch (error) {
     console.error(error);
-    const detail = error instanceof ApiError ? error.detail : 'Could not upload submissions.';
-    toast.add({severity: 'error', summary: 'Upload failed', detail});
+    toastError(toast, 'Upload failed', error, { fallback: 'Could not upload submissions.' });
   } finally {
     uploading.value = false;
   }

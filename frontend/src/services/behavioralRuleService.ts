@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete } from './api';
+import { apiGet, apiPost, apiPut, apiDelete, ApiError } from './api';
 import type { BehavioralRule } from '@/features/behavior/types/template';
 import type { ValidationResponse } from '@/features/behavior/types/validation';
 
@@ -21,7 +21,7 @@ export const behavioralRuleService = {
    * Fetch a specific behavioral rule by ID with full nodes/edges
    */
   async getBehavioralRule(id: string): Promise<BehavioralRule> {
-    return apiGet<BehavioralRule>(`/behavioral-rules/${id}`);
+    return apiGet<BehavioralRule>(`/behavioral-rules/${encodeURIComponent(id)}`);
   },
 
   /**
@@ -43,7 +43,7 @@ export const behavioralRuleService = {
       throw new Error('Behavioral Rule ID mismatch');
     }
     return apiPut<BehavioralRule>(
-      `/behavioral-rules/${id}`,
+      `/behavioral-rules/${encodeURIComponent(id)}`,
       JSON.stringify(rule),
       'application/json'
     );
@@ -53,7 +53,7 @@ export const behavioralRuleService = {
    * Delete a behavioral rule
    */
   async deleteBehavioralRule(id: string): Promise<{ message: string }> {
-    return apiDelete<{ message: string }>(`/behavioral-rules/${id}`);
+    return apiDelete<{ message: string }>(`/behavioral-rules/${encodeURIComponent(id)}`);
   },
 
   /**
@@ -81,8 +81,13 @@ export const behavioralRuleService = {
       // If it exists, update it
       return this.updateBehavioralRule(rule.id, rule);
     } catch (error) {
-      // If it doesn't exist (404), create it
-      return this.createBehavioralRule(rule);
+      // Only a genuine 404 means "doesn't exist yet" -> create. Any other
+      // error (network, 500) must propagate, otherwise a transient failure on
+      // the GET would trigger a create that clobbers existing server state.
+      if (error instanceof ApiError && error.status === 404) {
+        return this.createBehavioralRule(rule);
+      }
+      throw error;
     }
   }
 };
