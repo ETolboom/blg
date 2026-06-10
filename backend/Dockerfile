@@ -24,10 +24,6 @@ COPY backend/ .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Download spacy model into the virtual environment AFTER all syncs so uv doesn't uninstall it
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv run spacy download en_core_web_md
-
 # Copy compiled frontend build to static directory so FastAPI serves it
 COPY --from=frontend-builder /frontend/dist ./static
 

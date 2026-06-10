@@ -15,8 +15,6 @@ NPM := $(shell command -v bun >/dev/null 2>&1 && echo "bun" || echo "npm")
 install:
 	@echo "Installing backend dependencies..."
 	cd backend && $(PIP)
-	@echo "Downloading SpaCy model..."
-	cd backend && $(PYTHON) -m spacy download en_core_web_md
 	@echo "Installing frontend dependencies..."
 	cd frontend && $(NPM) install
 

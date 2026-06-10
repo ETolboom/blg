@@ -121,7 +121,6 @@ Install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) with Ubunt
 # --- Install ---
 cd backend
 pip install .                          # or: uv sync
-python -m spacy download en_core_web_md
 cd ..\frontend
 npm install                            # or: bun install
 
