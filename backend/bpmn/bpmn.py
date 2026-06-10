@@ -268,7 +268,8 @@ class Bpmn:
             return -1, None, 0.0
         else:
             logger.debug(
-                "[_search_task_in_path] Element has %d outgoing edges and is not a gateway, stopping search on this path",
+                "[_search_task_in_path] Element has %d outgoing edges and is not "
+                "a gateway, stopping search on this path",
                 len(target_element.outgoing),
             )
             return -1, None, 0.0

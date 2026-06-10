@@ -1,8 +1,7 @@
 from __future__ import annotations
 import logging
-from typing import ClassVar, Optional
-
 from typing import ClassVar
+
 from dataclasses import dataclass, field
 from collections import deque
 
@@ -238,7 +237,7 @@ class TraversalContext:
     ideal_match_threshold: float = 0.8  # Ideal match score
     visited_nodes: set[str] = field(default_factory=set)  # Cycle detection
 
-    def clone(self) -> "TraversalContext":
+    def clone(self) -> TraversalContext:
         """Deep copy for branch exploration"""
         return TraversalContext(
             workflow_pos=self.workflow_pos,
@@ -497,7 +496,7 @@ class BehavioralRuleCheck(Check):
                     match_threshold=0.8,
                 )
             else:
-                raise Exception(f"Gateway node missing gatewayType or gatewayOutcomes")
+                raise Exception("Gateway node missing gatewayType or gatewayOutcomes")
         else:
             return model.find_next_task(
                 context.bpmn_pos.id,

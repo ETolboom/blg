@@ -4,8 +4,6 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
-
 from checks import (
     CheckComplexity,
     CheckFormInput,
@@ -34,6 +32,8 @@ from schemas import (
     SupplementUploadResponse,
 )
 from services.submissions import REFERENCE_FILENAME, SubmissionService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

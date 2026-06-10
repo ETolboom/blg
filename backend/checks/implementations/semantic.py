@@ -1,4 +1,3 @@
-from collections import defaultdict
 from typing import ClassVar
 
 import spacy
@@ -131,7 +130,8 @@ def _get_nlp() -> spacy.language.Language:
 
 
 def atomicity_score(label: str) -> float:
-    """Returns how atomic a label is. Where 1 means it is fully atomic and describing a single action and 0 being not atomic at all."""
+    """Returns how atomic a label is. Where 1 means it is fully atomic and
+    describing a single action and 0 being not atomic at all."""
     doc = _get_nlp()(label)
     words = label.split()
     conjunction_words = ["and", "or", "then", "after", "also"]

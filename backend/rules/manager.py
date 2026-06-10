@@ -131,13 +131,13 @@ class BehavioralRuleManager:
             return None
 
         try:
-            with open(template_path, "r", encoding="utf-8") as f:
+            with open(template_path, encoding="utf-8") as f:
                 data = json.load(f)
                 return BehavioralRule(**data)
         except ValidationError as e:
             raise ValueError(f"Invalid template format: {e}")
         except Exception as e:
-            raise IOError(f"Error loading template: {e}")
+            raise OSError(f"Error loading template: {e}")
 
     def list_templates(self) -> list[dict]:
         """List all available templates with basic info"""
@@ -148,7 +148,7 @@ class BehavioralRuleManager:
 
         for file_path in self.templates_dir.glob("*.json"):
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     data = json.load(f)
                     templates.append(
                         {
@@ -176,7 +176,7 @@ class BehavioralRuleManager:
 
         for file_path in self.rules_dir.glob("*.json"):
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     data = json.load(f)
                     rules.append(
                         {
@@ -200,13 +200,13 @@ class BehavioralRuleManager:
             return None
 
         try:
-            with open(rule_path, "r", encoding="utf-8") as f:
+            with open(rule_path, encoding="utf-8") as f:
                 data = json.load(f)
                 return BehavioralRule(**data)
         except ValidationError as e:
             raise ValueError(f"Invalid rule format: {e}")
         except Exception as e:
-            raise IOError(f"Error loading rule: {e}")
+            raise OSError(f"Error loading rule: {e}")
 
     def save_rule(self, rule: BehavioralRule) -> BehavioralRule:
         """Save or update a behavioral rule"""
@@ -218,7 +218,7 @@ class BehavioralRuleManager:
                 json.dump(rule.model_dump(), f, indent=2, ensure_ascii=False)
             return rule
         except Exception as e:
-            raise IOError(f"Error saving rule: {e}")
+            raise OSError(f"Error saving rule: {e}")
 
     def delete_rule(self, rule_id: str) -> bool:
         """Delete a behavioral rule by ID"""
@@ -231,7 +231,7 @@ class BehavioralRuleManager:
             rule_path.unlink()
             return True
         except Exception as e:
-            raise IOError(f"Error deleting rule: {e}")
+            raise OSError(f"Error deleting rule: {e}")
 
     def rule_exists(self, rule_id: str) -> bool:
         """Check if a behavioral rule exists"""
@@ -249,7 +249,7 @@ class BehavioralRuleManager:
 
         for file_path in self.rules_dir.glob("_group_*.json"):
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     data = json.load(f)
                     groups.append(
                         {
@@ -274,13 +274,13 @@ class BehavioralRuleManager:
             return None
 
         try:
-            with open(group_path, "r", encoding="utf-8") as f:
+            with open(group_path, encoding="utf-8") as f:
                 data = json.load(f)
                 return BehavioralRuleGroup(**data)
         except ValidationError as e:
             raise ValueError(f"Invalid group format: {e}")
         except Exception as e:
-            raise IOError(f"Error loading group: {e}")
+            raise OSError(f"Error loading group: {e}")
 
     def save_group(self, group: BehavioralRuleGroup) -> BehavioralRuleGroup:
         """Save or update a group"""
@@ -309,7 +309,7 @@ class BehavioralRuleManager:
                 json.dump(group.model_dump(), f, indent=2, ensure_ascii=False)
             return group
         except Exception as e:
-            raise IOError(f"Error saving group: {e}")
+            raise OSError(f"Error saving group: {e}")
 
     def delete_group(self, group_id: str) -> bool:
         """Delete a group by ID"""
@@ -322,7 +322,7 @@ class BehavioralRuleManager:
             group_path.unlink()
             return True
         except Exception as e:
-            raise IOError(f"Error deleting group: {e}")
+            raise OSError(f"Error deleting group: {e}")
 
     def group_exists(self, group_id: str) -> bool:
         """Check if a group exists"""

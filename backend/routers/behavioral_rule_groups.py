@@ -3,8 +3,6 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-logger = logging.getLogger(__name__)
-
 from checks import CheckComplexity, StringFormInput
 from checks.implementations.behavioral import (
     BehavioralGroupEvaluator,
@@ -23,6 +21,8 @@ from rules.manager import (
 )
 from schemas import MessageResponse
 from services.submissions import REFERENCE_FILENAME, SubmissionService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
