@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from dependencies import set_active_project
 from schemas import ActiveProjectResponse, ProjectActionResponse
+from utils import safe_join
 
 router = APIRouter()
 
@@ -61,7 +62,8 @@ async def create_project(
     if not name:
         raise HTTPException(status_code=400, detail="Project name is required")
 
-    project_dir = os.path.join(_assignments_dir(request), name)
+    # `name` is client-supplied -> confine the new project under assignments/.
+    project_dir = safe_join(_assignments_dir(request), name)
     if os.path.exists(project_dir):
         raise HTTPException(
             status_code=409, detail=f"Project '{name}' already exists"

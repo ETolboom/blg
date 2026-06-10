@@ -16,6 +16,7 @@ from dependencies import (
 from rules.manager import BehavioralRule, BehavioralRuleManager
 from schemas import MessageResponse
 from services.submissions import SubmissionService
+from utils import safe_join
 
 router = APIRouter()
 
@@ -156,7 +157,7 @@ async def validate_rule(
 
     # Resolve the BPMN XML to evaluate against
     if filename is not None:
-        submission_path = os.path.join(base_path, "submissions", filename)
+        submission_path = safe_join(os.path.join(base_path, "submissions"), filename)
         if not os.path.exists(submission_path):
             raise HTTPException(
                 status_code=404, detail=f"Submission '{filename}' not found"

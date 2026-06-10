@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 from xml.etree import ElementTree
 
+from utils.paths import safe_join as safe_join
+
 logger = logging.getLogger(__name__)
 
 

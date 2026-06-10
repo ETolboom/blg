@@ -9,6 +9,7 @@ from rubric import Assignment, RubricDefinition
 from rules.manager import BehavioralRuleManager
 from services.evaluation import evaluate_model
 from services.submissions import REFERENCE_FILENAME, SubmissionService
+from utils import safe_join
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,8 @@ def set_active_project(app, name: str) -> None:
     """Make ``name`` the active assignment: (re)build the rule manager,
     submission service and rubric for that project's directory."""
     data_root = app.state.data_root
-    project_dir = os.path.join(data_root, "assignments", name)
+    # `name` is client-supplied (landing screen) -> confine it under assignments/.
+    project_dir = safe_join(os.path.join(data_root, "assignments"), name)
     if not os.path.isdir(project_dir):
         raise FileNotFoundError(f"Project '{name}' not found")
 

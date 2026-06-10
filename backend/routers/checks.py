@@ -15,6 +15,7 @@ from rubric import Rubric, RubricDefinition
 from rules.manager import BehavioralRuleManager
 from services.evaluation import evaluate_model
 from services.submissions import REFERENCE_FILENAME, SubmissionService
+from utils import safe_join
 
 router = APIRouter()
 
@@ -54,7 +55,7 @@ async def analyze_submission(
     if filename == REFERENCE_FILENAME:
         return submission_service.compose_rubric(REFERENCE_FILENAME)
 
-    submission = os.path.join(submission_service.submissions_path, filename)
+    submission = safe_join(submission_service.submissions_path, filename)
 
     if os.path.exists(submission + ".json"):
         # We already have an analyzed result.

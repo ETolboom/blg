@@ -13,6 +13,7 @@ from rubric import (
     SubmissionCriterionResult,
     SubmissionResult,
 )
+from utils import safe_join
 
 # Maximum accepted size for an uploaded .bpmn submission.
 MAX_SUBMISSION_SIZE_MB = 10
@@ -51,7 +52,7 @@ class SubmissionService:
             else:
                 raise HTTPException(status_code=404, detail="Reference XML not found")
 
-        path = os.path.join(self.submissions_path, filename)
+        path = safe_join(self.submissions_path, filename)
         with open(path) as f:
             return f.read()
 
@@ -64,7 +65,7 @@ class SubmissionService:
         """
         if filename == REFERENCE_FILENAME:
             return os.path.join(self.base_path, "reference.bpmn.json")
-        return os.path.join(self.submissions_path, filename + ".json")
+        return safe_join(self.submissions_path, filename + ".json")
 
     def _read_eval(self, filename: str) -> SubmissionResult | None:
         """Read a per-model evaluation file and return a SubmissionResult."""
@@ -139,7 +140,7 @@ class SubmissionService:
                     detail=f"'{file.filename}' exceeds the {MAX_SUBMISSION_SIZE_MB}MB limit",
                 )
 
-            dest = os.path.join(self.submissions_path, file.filename)
+            dest = safe_join(self.submissions_path, file.filename)
             with open(dest, "wb") as f:
                 f.write(content)
 
