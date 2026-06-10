@@ -87,13 +87,21 @@ class CheckComplexity(str, Enum):
     COMPLEX = "2"
 
 
-class CoverageDetail(BaseModel):
-    """Optional breakdown surfaced by Task Coverage (and shown in its info
-    pop-up): expected (reference) tasks absent from the submission, and
-    submission tasks that matched no expected task."""
+class CheckDetailSection(BaseModel):
+    """One labeled group of human-readable lines for a criterion's (i) info
+    pop-up. ``severity`` drives the colour the frontend renders it in."""
 
-    missing: list[str] = []
-    unexpected: list[str] = []
+    label: str
+    severity: Literal["error", "warn", "info"] = "info"
+    items: list[str] = []
+
+
+class CheckDetail(BaseModel):
+    """Optional breakdown shown in a criterion's info pop-up. Generic across
+    checks: Task Coverage lists missing/extra tasks; the duplicate checks list
+    the matched pairs."""
+
+    sections: list[CheckDetailSection] = []
 
 
 class CheckResult(BaseModel):
@@ -103,11 +111,13 @@ class CheckResult(BaseModel):
     name: str
     check_complexity: CheckComplexity
     description: str = ""
-    fulfilled: bool
+    # None = indeterminate ("?"): the check ran but the outcome needs a human look
+    # (e.g. Task Coverage when all expected tasks are present but extras exist).
+    fulfilled: bool | None
     confidence: float = 1.0
     problematic_elements: list[str] = []
     inputs: list[CheckFormInput] = []
-    coverage_detail: CoverageDetail | None = None
+    detail: CheckDetail | None = None
 
 
 class Check(BaseModel, ABC):
@@ -122,6 +132,9 @@ class Check(BaseModel, ABC):
     check_complexity: ClassVar[CheckComplexity]
     threshold: ClassVar[float] = 0.0
     input_scheme: ClassVar[list[CheckFormInput]]
+    # Sanity checks (e.g. Task Coverage) are diagnostic only and contribute no
+    # points; criteria created for them default to 0 points.
+    awards_points: ClassVar[bool] = True
 
     # This field must be provided at instantiation
     model_xml: str

@@ -4,13 +4,30 @@ from typing import ClassVar
 from checks import (
     Check,
     CheckComplexity,
+    CheckDetail,
+    CheckDetailSection,
     CheckFormInput,
     CheckResult,
-    CoverageDetail,
     StringFormInput,
 )
 from utils import extract_all_tasks, ExtractedTask
 from utils.similarity import create_similarity_matrix
+
+
+def _coverage_detail(missing: list[str], unexpected: list[str]) -> CheckDetail | None:
+    """Build the info-pop-up breakdown, omitting empty sections."""
+    sections = []
+    if missing:
+        sections.append(
+            CheckDetailSection(label="Missing tasks", severity="error", items=missing)
+        )
+    if unexpected:
+        sections.append(
+            CheckDetailSection(
+                label="Unmatched tasks", severity="warn", items=unexpected
+            )
+        )
+    return CheckDetail(sections=sections) if sections else None
 
 
 class TaskCoverageCheck(Check):
@@ -22,6 +39,8 @@ class TaskCoverageCheck(Check):
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.CONFIGURABLE
     threshold: ClassVar[float] = 0.8
     input_scheme: ClassVar[list[CheckFormInput]] = []
+    # Diagnostic sanity gate: never awards points.
+    awards_points: ClassVar[bool] = False
 
     @classmethod
     def load_dependencies(cls) -> None:
@@ -84,7 +103,7 @@ class TaskCoverageCheck(Check):
                 confidence=0.0,
                 problematic_elements=[],
                 inputs=inputs,
-                coverage_detail=CoverageDetail(missing=reference_labels),
+                detail=_coverage_detail(reference_labels, []),
             )
 
         student_labels = [task.name for task in tasks if task.name]
@@ -120,16 +139,27 @@ class TaskCoverageCheck(Check):
             if task.name and score.item() < self.threshold
         ]
 
+        # Sanity-gate outcome (3 states):
+        #   missing tasks        -> not fulfilled (rules can't match; grade manually)
+        #   all present + extras -> indeterminate "?" (needs a human look)
+        #   all present, no extra -> fulfilled
+        if missing:
+            fulfilled: bool | None = False
+        elif unexpected:
+            fulfilled = None
+        else:
+            fulfilled = True
+
         return CheckResult(
             id=self.id,
             name=self.name,
             description=self.description,
             check_complexity=self.check_complexity,
-            fulfilled=coverage >= 1.0,
+            fulfilled=fulfilled,
             confidence=round(coverage, 3),
             problematic_elements=problematic_elements,
             inputs=inputs,
-            coverage_detail=CoverageDetail(missing=missing, unexpected=unexpected),
+            detail=_coverage_detail(missing, unexpected),
         )
 
     def is_applicable(self) -> bool:

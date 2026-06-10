@@ -107,11 +107,13 @@ class SubmissionService:
                     confidence=sr.confidence if sr else 0.0,
                     problematic_elements=sr.problematic_elements if sr else [],
                     group_result=sr.group_result if sr else None,
-                    coverage_detail=sr.coverage_detail if sr else None,
+                    detail=sr.detail if sr else None,
                 )
             )
 
-        return Rubric(criteria=composed, assignment=None)
+        # Carry the project's assignment (incl. reference_xml, populated at load)
+        # so the grading view can render the reference model.
+        return Rubric(criteria=composed, assignment=self.rubric.assignment)
 
     def invalidate_all_results(self) -> None:
         """Delete all cached .bpmn.json result files."""

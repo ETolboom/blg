@@ -4,7 +4,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from pydantic import BaseModel
 
-from checks import CheckComplexity, CheckFormInput, CheckResult, CoverageDetail
+from checks import CheckComplexity, CheckDetail, CheckFormInput, CheckResult
 from rules.manager import RuleEvaluationSummary
 
 
@@ -27,7 +27,7 @@ class SubmissionCriterionResult(BaseModel):
     problematic_elements: list[str] = []
     inputs: list[CheckFormInput] = []
     group_result: GroupResultSummary | None = None
-    coverage_detail: CoverageDetail | None = None
+    detail: CheckDetail | None = None
 
 
 class SubmissionResult(BaseModel):

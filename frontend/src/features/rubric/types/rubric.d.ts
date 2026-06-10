@@ -12,11 +12,14 @@ export interface Criterion extends Check {
     score: number | null;
     problematic_elements: string[];
 
-    // Task Coverage info pop-up: expected tasks absent from the submission, and
-    // submission tasks that matched no expected task.
-    coverage_detail?: {
-        missing: string[];
-        unexpected: string[];
+    // Optional breakdown shown in the criterion's (i) info pop-up. Generic across
+    // checks (Task Coverage: missing/extra tasks; duplicate checks: matched pairs).
+    detail?: {
+        sections: {
+            label: string;
+            severity: 'error' | 'warn' | 'info';
+            items: string[];
+        }[];
     };
 
     // Template/Behavior specific

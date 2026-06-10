@@ -94,7 +94,8 @@ async def handle_onboarding_rubric(
 
     definitions: list[CriterionDefinition] = []
     for algorithm in onboarding_rubric.checks:
-        result = manager.get_check(algorithm).analyze(inputs=None)
+        check = manager.get_check(algorithm)
+        result = check.analyze(inputs=None)
         definitions.append(
             CriterionDefinition(
                 id=result.id,
@@ -102,7 +103,7 @@ async def handle_onboarding_rubric(
                 description=result.description,
                 check_complexity=result.check_complexity,
                 inputs=result.inputs,
-                default_points=1.0,
+                default_points=1.0 if check.awards_points else 0.0,
             )
         )
 
@@ -213,7 +214,8 @@ async def update_criteria(
     else:
         manager = registry.create_manager("")
     # Run the check once to capture its configured inputs as the definition.
-    result = manager.get_check(algorithm_id).analyze(inputs=inputs)
+    check = manager.get_check(algorithm_id)
+    result = check.analyze(inputs=inputs)
     rubric.criteria.append(
         CriterionDefinition(
             id=algorithm_id,
@@ -221,7 +223,7 @@ async def update_criteria(
             description=result.description,
             check_complexity=result.check_complexity,
             inputs=result.inputs,
-            default_points=1.0,
+            default_points=1.0 if check.awards_points else 0.0,
         )
     )
 

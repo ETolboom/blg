@@ -43,7 +43,7 @@ const loadRubric = async () => {
       rubric.value = fetchedRubric;
     }
     
-    reference_xml.value = rubric.value.assignment.reference_xml;
+    reference_xml.value = rubric.value.assignment?.reference_xml ?? '';
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       isLoading.value = false;

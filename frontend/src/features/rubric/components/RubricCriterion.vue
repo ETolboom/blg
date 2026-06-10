@@ -31,18 +31,25 @@ const toggleExpand = () => {
   expanded.value = !expanded.value;
 };
 
-// Task Coverage info pop-up: only shown when the backend attached a breakdown
-// with at least one missing or unexpected task.
-const coverage = computed(() => props.criterion?.coverage_detail);
-const hasCoverageDetail = computed(() => {
-  const c = coverage.value;
-  return !!c && (c.missing.length > 0 || c.unexpected.length > 0);
-});
+// (i) info pop-up: shown only when the backend attached a detail breakdown with
+// at least one non-empty section (e.g. Task Coverage's missing/extra tasks, or a
+// duplicate check's matched pairs).
+const detail = computed(() => props.criterion?.detail);
+const hasDetail = computed(
+    () => !!detail.value && detail.value.sections.some((s) => s.items.length > 0),
+);
 
-const coveragePopover = ref();
-const toggleCoverage = (event: Event) => {
-  coveragePopover.value?.toggle(event);
+const detailPopover = ref();
+const toggleDetail = (event: Event) => {
+  detailPopover.value?.toggle(event);
 };
+
+const severityClass = (severity: 'error' | 'warn' | 'info'): string =>
+    severity === 'error'
+        ? 'text-red-600'
+        : severity === 'warn'
+            ? 'text-amber-600'
+            : 'text-gray-600';
 
 
 const editing = ref(false);
@@ -68,7 +75,7 @@ function finishEdit() {
     <div class="flex flex-col justify-center items-center py-2">
       <template v-if="state === null">
         <div class="bg-yellow-600 cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm">
-          <span class="text-3xl">?</span>
+          <span class="text-3xl text-white">?</span>
         </div>
         <p class="bg-gray-50 text-gray-700 border border-gray-200 w-full h-8 flex justify-center items-center font-semibold rounded-b-sm">
           {{ props.points }}</p>
@@ -135,9 +142,10 @@ function finishEdit() {
         <p class="text-gray-600 text-sm flex-1">{{ description }}</p>
       </div>
       <div class="flex items-center pr-2 absolute right-0">
-        <button v-if="hasCoverageDetail" class="p-2 hover:bg-gray-100 rounded-md transition-colors" title="Coverage details"
-                @click.stop="toggleCoverage">
-          <Info :size="20" class="text-blue-500"/>
+        <button v-if="hasDetail" class="p-2 hover:bg-gray-100 rounded-md transition-colors"
+                :title="state === true ? 'Details (passed)' : 'Details'"
+                @click.stop="toggleDetail">
+          <Info :size="20" :class="state === true ? 'text-gray-400' : 'text-blue-500'"/>
         </button>
         <button v-if="category === CheckComplexity.COMPLEX || (category !== CheckComplexity.SIMPLE && isEditable)" class="p-2 hover:bg-gray-100 rounded-md transition-colors" :title="isEditable ? 'Edit rule' : 'View rule'"
                 @click.stop="$emit('edit')">
@@ -161,27 +169,19 @@ function finishEdit() {
         </button>
       </div>
 
-      <Popover ref="coveragePopover">
+      <Popover ref="detailPopover">
         <div class="max-w-xs text-sm">
-          <p class="text-gray-500 mb-3">
-            Task coverage checks whether the submission contains the expected tasks.
-            If many are missing the behavioral rules can't match — consider grading
-            this submission manually.
-          </p>
-          <div v-if="coverage?.missing.length" class="mb-3">
-            <p class="font-semibold text-red-600 mb-1">
-              Missing tasks ({{ coverage.missing.length }})
+          <div
+            v-for="(section, si) in detail?.sections ?? []"
+            v-show="section.items.length"
+            :key="si"
+            class="mb-3 last:mb-0"
+          >
+            <p class="font-semibold mb-1" :class="severityClass(section.severity)">
+              {{ section.label }} ({{ section.items.length }})
             </p>
             <ul class="list-disc list-inside text-gray-700 space-y-0.5">
-              <li v-for="(label, i) in coverage.missing" :key="'m' + i">{{ label }}</li>
-            </ul>
-          </div>
-          <div v-if="coverage?.unexpected.length">
-            <p class="font-semibold text-amber-600 mb-1">
-              Unmatched tasks ({{ coverage.unexpected.length }})
-            </p>
-            <ul class="list-disc list-inside text-gray-700 space-y-0.5">
-              <li v-for="(label, i) in coverage.unexpected" :key="'u' + i">{{ label }}</li>
+              <li v-for="(item, ii) in section.items" :key="ii">{{ item }}</li>
             </ul>
           </div>
         </div>
