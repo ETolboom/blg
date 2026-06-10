@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import {Check, Edit, ExternalLink, Split, XIcon, Trash2} from "lucide-vue-next";
+import {Check, Edit, ExternalLink, Info, Split, XIcon, Trash2} from "lucide-vue-next";
 import {computed, ref} from "vue";
+import Popover from "primevue/popover";
 import {CheckComplexity} from "@/features/rubric/types/check_complexity.ts";
 import type {Criterion} from "@/features/rubric/types/rubric";
 import {isGroup as isGroupCriterion} from "@/features/behavior/types/group";
@@ -28,6 +29,19 @@ const expanded = ref(false);
 
 const toggleExpand = () => {
   expanded.value = !expanded.value;
+};
+
+// Task Coverage info pop-up: only shown when the backend attached a breakdown
+// with at least one missing or unexpected task.
+const coverage = computed(() => props.criterion?.coverage_detail);
+const hasCoverageDetail = computed(() => {
+  const c = coverage.value;
+  return !!c && (c.missing.length > 0 || c.unexpected.length > 0);
+});
+
+const coveragePopover = ref();
+const toggleCoverage = (event: Event) => {
+  coveragePopover.value?.toggle(event);
 };
 
 
@@ -121,6 +135,10 @@ function finishEdit() {
         <p class="text-gray-600 text-sm flex-1">{{ description }}</p>
       </div>
       <div class="flex items-center pr-2 absolute right-0">
+        <button v-if="hasCoverageDetail" class="p-2 hover:bg-gray-100 rounded-md transition-colors" title="Coverage details"
+                @click.stop="toggleCoverage">
+          <Info :size="20" class="text-blue-500"/>
+        </button>
         <button v-if="category === CheckComplexity.COMPLEX || (category !== CheckComplexity.SIMPLE && isEditable)" class="p-2 hover:bg-gray-100 rounded-md transition-colors" :title="isEditable ? 'Edit rule' : 'View rule'"
                 @click.stop="$emit('edit')">
 
@@ -134,7 +152,7 @@ function finishEdit() {
       </div>
       
       <div v-if="isGroup" class="mt-2 text-xs">
-        <button 
+        <button
           class="text-blue-600 hover:underline focus:outline-none flex items-center gap-1"
           @click.stop="toggleExpand"
         >
@@ -142,6 +160,32 @@ function finishEdit() {
           <span v-if="criterion?.rule_results">({{ criterion.rule_results.length }} rules)</span>
         </button>
       </div>
+
+      <Popover ref="coveragePopover">
+        <div class="max-w-xs text-sm">
+          <p class="text-gray-500 mb-3">
+            Task coverage checks whether the submission contains the expected tasks.
+            If many are missing the behavioral rules can't match — consider grading
+            this submission manually.
+          </p>
+          <div v-if="coverage?.missing.length" class="mb-3">
+            <p class="font-semibold text-red-600 mb-1">
+              Missing tasks ({{ coverage.missing.length }})
+            </p>
+            <ul class="list-disc list-inside text-gray-700 space-y-0.5">
+              <li v-for="(label, i) in coverage.missing" :key="'m' + i">{{ label }}</li>
+            </ul>
+          </div>
+          <div v-if="coverage?.unexpected.length">
+            <p class="font-semibold text-amber-600 mb-1">
+              Unmatched tasks ({{ coverage.unexpected.length }})
+            </p>
+            <ul class="list-disc list-inside text-gray-700 space-y-0.5">
+              <li v-for="(label, i) in coverage.unexpected" :key="'u' + i">{{ label }}</li>
+            </ul>
+          </div>
+        </div>
+      </Popover>
     </div>
   </div>
 

@@ -107,6 +107,7 @@ class SubmissionService:
                     confidence=sr.confidence if sr else 0.0,
                     problematic_elements=sr.problematic_elements if sr else [],
                     group_result=sr.group_result if sr else None,
+                    coverage_detail=sr.coverage_detail if sr else None,
                 )
             )
 

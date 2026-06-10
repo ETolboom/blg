@@ -87,6 +87,15 @@ class CheckComplexity(str, Enum):
     COMPLEX = "2"
 
 
+class CoverageDetail(BaseModel):
+    """Optional breakdown surfaced by Task Coverage (and shown in its info
+    pop-up): expected (reference) tasks absent from the submission, and
+    submission tasks that matched no expected task."""
+
+    missing: list[str] = []
+    unexpected: list[str] = []
+
+
 class CheckResult(BaseModel):
     """This class describes the format in which the algorithm is presented."""
 
@@ -98,6 +107,7 @@ class CheckResult(BaseModel):
     confidence: float = 1.0
     problematic_elements: list[str] = []
     inputs: list[CheckFormInput] = []
+    coverage_detail: CoverageDetail | None = None
 
 
 class Check(BaseModel, ABC):

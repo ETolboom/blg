@@ -1,7 +1,14 @@
 import torch
 from typing import ClassVar
 
-from checks import Check, CheckComplexity, CheckFormInput, CheckResult, StringFormInput
+from checks import (
+    Check,
+    CheckComplexity,
+    CheckFormInput,
+    CheckResult,
+    CoverageDetail,
+    StringFormInput,
+)
 from utils import extract_all_tasks, ExtractedTask
 from utils.similarity import create_similarity_matrix
 
@@ -66,6 +73,8 @@ class TaskCoverageCheck(Check):
             )
 
         if not tasks:
+            # No tasks at all: every expected task is missing — the strongest
+            # signal that this submission is better graded manually.
             return CheckResult(
                 id=self.id,
                 name=self.name,
@@ -75,6 +84,7 @@ class TaskCoverageCheck(Check):
                 confidence=0.0,
                 problematic_elements=[],
                 inputs=inputs,
+                coverage_detail=CoverageDetail(missing=reference_labels),
             )
 
         student_labels = [task.name for task in tasks if task.name]
@@ -89,10 +99,23 @@ class TaskCoverageCheck(Check):
         matched = sum(1 for s in best_ref_scores if s.item() >= self.threshold)
         coverage = matched / len(reference_labels)
 
-        # Student tasks with no clear reference counterpart are flagged
+        # Expected (reference) tasks that no student task matched well enough.
+        missing = [
+            label
+            for label, score in zip(reference_labels, best_ref_scores)
+            if score.item() < self.threshold
+        ]
+
+        # Student tasks with no clear reference counterpart are flagged (ids for
+        # BPMN highlighting; names for the info pop-up).
         student_best_scores = torch.max(similarity_matrix, dim=0).values
         problematic_elements = [
             task.id
+            for task, score in zip(tasks, student_best_scores)
+            if task.name and score.item() < self.threshold
+        ]
+        unexpected = [
+            task.name
             for task, score in zip(tasks, student_best_scores)
             if task.name and score.item() < self.threshold
         ]
@@ -106,6 +129,7 @@ class TaskCoverageCheck(Check):
             confidence=round(coverage, 3),
             problematic_elements=problematic_elements,
             inputs=inputs,
+            coverage_detail=CoverageDetail(missing=missing, unexpected=unexpected),
         )
 
     def is_applicable(self) -> bool:

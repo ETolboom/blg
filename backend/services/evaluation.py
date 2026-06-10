@@ -58,6 +58,7 @@ def evaluate_model(
                     confidence=result.confidence,
                     problematic_elements=result.problematic_elements,
                     score=None,
+                    coverage_detail=result.coverage_detail,
                 )
             )
             continue

@@ -12,6 +12,13 @@ export interface Criterion extends Check {
     score: number | null;
     problematic_elements: string[];
 
+    // Task Coverage info pop-up: expected tasks absent from the submission, and
+    // submission tasks that matched no expected task.
+    coverage_detail?: {
+        missing: string[];
+        unexpected: string[];
+    };
+
     // Template/Behavior specific
     nodes?: Node[];
     edges?: Edge[];
