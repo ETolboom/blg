@@ -36,7 +36,6 @@ const currentHighlightElements = ref<string[]>([]);
 const availableChecks = ref<Check[] | null>(null);
 const availableRules = ref<BehavioralRule[] | null>(null);
 const availableTemplates = ref<BehavioralRule[] | null>(null);
-const isLoadingRules = ref<boolean>(false);
 const addDialogVisible = ref<boolean>(false);
 const behavioralAddDialogVisible = ref<boolean>(false);
 const groupAddDialogVisible = ref<boolean>(false);
@@ -117,14 +116,11 @@ const fetchAvailableChecks = async (): Promise<void> => {
 };
 
 const fetchAvailableRules = async (): Promise<void> => {
-  isLoadingRules.value = true;
   try {
     availableRules.value = await behavioralRuleService.getBehavioralRules();
   } catch (error) {
     toastError(toast, 'Could not load rules', error);
     availableRules.value = [];
-  } finally {
-    isLoadingRules.value = false;
   }
 };
 

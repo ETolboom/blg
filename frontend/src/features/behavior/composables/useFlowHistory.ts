@@ -91,5 +91,5 @@ export function useFlowHistory(
     applySnapshot(next)
   }
 
-  return {isRestoring, canUndo, canRedo, pushState, undo, redo}
+  return {isRestoring, pushState, undo, redo}
 }

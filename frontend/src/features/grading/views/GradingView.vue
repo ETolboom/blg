@@ -12,6 +12,13 @@ import ReferenceHeader from "@/features/grading/components/ReferenceHeader.vue";
 import OnboardingView from "@/features/onboarding/views/OnboardingView.vue";
 import RubricLayout from "@/features/rubric/layouts/RubricLayout.vue";
 
+const TAB = {
+  SUBMISSION: '0',
+  REFERENCE: '1',
+  SUPPLEMENT: '2',
+} as const;
+type TabValue = (typeof TAB)[keyof typeof TAB];
+
 const toast = useToast();
 const router = useRouter();
 
@@ -80,7 +87,7 @@ const initModeler = async (): Promise<boolean> => {
   }
 
   modeler.value.get('eventBus').on('commandStack.changed', () => {
-    if (activeTab.value === '1') hasReferenceChanges.value = true;
+    if (activeTab.value === TAB.REFERENCE) hasReferenceChanges.value = true;
   });
 
   // Idempotent: removing an unregistered handler is a no-op, so re-initializing
@@ -138,11 +145,11 @@ const toggleReference = async () => {
   isLoading.value = true;
 
   try {
-    if (activeTab.value === '0') {
+    if (activeTab.value === TAB.SUBMISSION) {
       if (submission_xml.value) {
         await modeler.value.importXML(submission_xml.value);
       }
-    } else if (activeTab.value === '1') {
+    } else if (activeTab.value === TAB.REFERENCE) {
       if (reference_xml.value) {
         await modeler.value.importXML(reference_xml.value);
         hasReferenceChanges.value = false;
@@ -160,14 +167,14 @@ const toggleReference = async () => {
   isLoading.value = false;
 };
 
-const activeTab = ref('1');
+const activeTab = ref<TabValue>(TAB.REFERENCE);
 
-const onTabChange = async (event: any) => {
-  activeTab.value = event;
+const onTabChange = async (value: string | number) => {
+  activeTab.value = String(value) as TabValue;
   await nextTick();
   // Only swap the reference model when going to the Reference tab;
   // the Submission load is handled by GradingHeader via its isActive prop watcher.
-  if (activeTab.value === '1') {
+  if (activeTab.value === TAB.REFERENCE) {
      await Promise.all([toggleReference(), loadRubric()]);
   }
 };
@@ -295,33 +302,33 @@ const onOnboarded = async () => {
         <Tabs v-model:value="activeTab" class="flex flex-col h-full w-full" @update:value="onTabChange">
           <div class="flex justify-center border-b border-gray-200 bg-gray-50/50 pt-2 shrink-0">
             <TabList>
-              <Tab value="0">Submission</Tab>
-              <Tab value="1">Reference</Tab>
-              <Tab value="2">Supplement</Tab>
+              <Tab :value="TAB.SUBMISSION">Submission</Tab>
+              <Tab :value="TAB.REFERENCE">Reference</Tab>
+              <Tab :value="TAB.SUPPLEMENT">Supplement</Tab>
             </TabList>
           </div>
           <TabPanels class="flex-1 p-0 relative overflow-hidden">
             <!-- Render the modeler only on Submission and Reference tabs -->
-            <div v-show="activeTab === '0' || activeTab === '1'" class="absolute inset-0 flex flex-col">
-                <div v-show="activeTab === '0' && isModelerReady && modeler">
-                  <GradingHeader :modeler="modeler!" :is-active="activeTab === '0'" @regrade="gradeSubmission" @loading="(loading) => isLoading = loading"/>
+            <div v-show="activeTab === TAB.SUBMISSION || activeTab === TAB.REFERENCE" class="absolute inset-0 flex flex-col">
+                <div v-show="activeTab === TAB.SUBMISSION && isModelerReady && modeler">
+                  <GradingHeader :modeler="modeler!" :is-active="activeTab === TAB.SUBMISSION" @regrade="gradeSubmission" @loading="(loading) => isLoading = loading"/>
                 </div>
-                <ReferenceHeader v-show="activeTab === '1' && isModelerReady && modeler"
+                <ReferenceHeader v-show="activeTab === TAB.REFERENCE && isModelerReady && modeler"
                                 :has-changes="hasReferenceChanges"
                                 :is-saving="isSavingReference"
                                 :is-regrading="isRegradingAfterSave"
                                 @save="saveReference"
                                 @clear="clearReference"/>
-                <div ref="bpmn-container" class="flex-1 w-full relative" :class="{'read-only-modeler': activeTab !== '1'}"/>
+                <div ref="bpmn-container" class="flex-1 w-full relative" :class="{'read-only-modeler': activeTab !== TAB.REFERENCE}"/>
                 <GradingZoomControls v-if="isModelerReady && modeler" :modeler="modeler"/>
             </div>
 
             <!-- Empty TabPanels to keep PrimeVue Tabs happy, but absolute positioning handles actual layout -->
-            <TabPanel value="0" class="h-0 p-0 m-0"></TabPanel>
-            <TabPanel value="1" class="h-0 p-0 m-0"></TabPanel>
+            <TabPanel :value="TAB.SUBMISSION" class="h-0 p-0 m-0"></TabPanel>
+            <TabPanel :value="TAB.REFERENCE" class="h-0 p-0 m-0"></TabPanel>
 
             <!-- Supplement PDF Viewer -->
-            <TabPanel value="2" class="h-full w-full p-0 flex flex-col">
+            <TabPanel :value="TAB.SUPPLEMENT" class="h-full w-full p-0 flex flex-col">
               <div class="flex-1 w-full h-full p-4 overflow-hidden">
                 <iframe
                     src="/api/rubric/supplement"
@@ -333,11 +340,11 @@ const onOnboarded = async () => {
           </TabPanels>
         </Tabs>
       </div>
-      <RubricLayout v-if="isModelerReady && typeof modeler !== 'undefined' && rubric"
+      <RubricLayout v-if="isModelerReady && modeler && rubric"
                     :criteria="rubric.criteria"
                     :modeler="modeler!"
-                    :is-editable="activeTab !== '0'"
-                    :submission-name="activeTab === '0' ? submission_name : undefined"
+                    :is-editable="activeTab !== TAB.SUBMISSION"
+                    :submission-name="activeTab === TAB.SUBMISSION ? submission_name : undefined"
                     @saveSubmission="saveSubmission"
                     @updateRubric="updateRubric"/>
     </div>

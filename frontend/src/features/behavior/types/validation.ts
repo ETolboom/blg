@@ -54,5 +54,5 @@ export interface ValidationResponse {
 export interface NodeValidationState {
   nodeId: string;
   matchDetail: MatchDetail | null;
-  validationStatus: 'perfect' | 'good-wrong-position' | 'acceptable-not-ideal' | 'incorrect' | 'unmatched';
+  validationStatus: 'perfect' | 'good-wrong-position' | 'acceptable-not-ideal' | 'incorrect';
 }
