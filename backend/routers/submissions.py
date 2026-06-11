@@ -1,7 +1,16 @@
-from fastapi import APIRouter, Depends, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
+from pydantic import BaseModel
 
-from dependencies import get_submission_service
-from rubric import SubmissionCriterionResult
+from checks.manager import CheckRegistry
+from dependencies import (
+    get_check_registry,
+    get_rubric,
+    get_rule_manager,
+    get_submission_service,
+)
+from rubric import Rubric, RubricDefinition, SubmissionCriterionResult
+from rules.manager import BehavioralRuleManager
+from services.evaluation import evaluate_criterion
 from services.submissions import SubmissionService
 
 router = APIRouter()
@@ -19,8 +28,6 @@ async def get_submissions_list(
 async def export_submission(
     filename: str, service: SubmissionService = Depends(get_submission_service)
 ) -> Response:
-    """Export grading results for a single submission as an Excel file."""
-    content = service.export_submission(filename)
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -34,8 +41,6 @@ async def export_submission(
 async def export_all_submission(
     service: SubmissionService = Depends(get_submission_service),
 ) -> Response:
-    """Export grading results for all submissions as a single Excel workbook."""
-    content = service.export_all_submissions()
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -69,3 +74,54 @@ async def update_submission(
 ) -> None:
     """Manually update criterion results for a specific submission."""
     service.update_submission_criteria(filename, criteria)
+
+
+class ThresholdOverrideRequest(BaseModel):
+    # None resets the respective cut-off to the check's class default.
+    threshold: float | None = None
+    ideal_threshold: float | None = None
+
+
+@router.post("/submissions/{filename}/criteria/{criterion_id}/regrade")
+async def regrade_criterion_threshold(
+    filename: str,
+    criterion_id: str,
+    body: ThresholdOverrideRequest,
+    rubric: RubricDefinition = Depends(get_rubric),
+    registry: CheckRegistry = Depends(get_check_registry),
+    rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
+    service: SubmissionService = Depends(get_submission_service),
+) -> Rubric:
+    crit = next((c for c in rubric.criteria if c.id == criterion_id), None)
+    if crit is None:
+        raise HTTPException(
+            status_code=404, detail=f"Criterion '{criterion_id}' not found in rubric"
+        )
+    supports, default_min, default_ideal = registry.threshold_meta(criterion_id)
+    if not supports:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Criterion '{criterion_id}' does not support a threshold override",
+        )
+
+    # Record an override only when it genuinely differs from the default, so a
+    # value left at its default reads as "no deviation" everywhere downstream.
+    def _deviation(value: float | None, default: float | None) -> float | None:
+        return None if value is None or value == default else value
+
+    threshold = _deviation(body.threshold, default_min)
+    ideal_threshold = _deviation(body.ideal_threshold, default_ideal)
+
+    model_xml = service.get_submission_xml(filename)
+    manager = registry.create_manager(model_xml)
+    result = evaluate_criterion(
+        crit,
+        manager,
+        model_xml,
+        rule_manager,
+        threshold=threshold,
+        ideal_threshold=ideal_threshold,
+    )
+    service.apply_criterion_result(filename, result)
+
+    return service.compose_rubric(filename)

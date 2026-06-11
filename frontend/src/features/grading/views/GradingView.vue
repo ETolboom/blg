@@ -357,8 +357,7 @@ const onOnboarded = async () => {
 }
 
 .read-only-modeler .djs-palette,
-.read-only-modeler .djs-context-pad,
-.read-only-modeler .bjs-powered-by {
+.read-only-modeler .djs-context-pad {
     display: none !important;
 }
 

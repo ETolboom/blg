@@ -38,7 +38,12 @@ class PoolLaneCheck(Check):
         ),
     ]
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
         if inputs is None:
             # Analyze pools & lanes whilst taking reference xml as ground truth.
             inputs = []

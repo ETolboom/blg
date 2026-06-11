@@ -18,6 +18,14 @@ from utils.similarity import create_similarity_matrix
 # A candidate duplicate: the two tasks plus a 0..1 confidence score.
 DuplicatePair = tuple[ExtractedTask, ExtractedTask, float]
 
+_DUP_MIN_LABEL = "Flag candidates from"
+_DUP_IDEAL_LABEL = "Count as duplicate at"
+_DUP_HINT = (
+    "Pairs at least this similar are surfaced as possible duplicates; at or above "
+    "the upper value they're counted as a definite duplicate (failing the check). "
+    "Lowering the floor surfaces more candidates to review."
+)
+
 
 def _format_pair(pair: DuplicatePair) -> str:
     a, b, score = pair
@@ -78,6 +86,12 @@ class AtomicityCheck(Check):
     description: ClassVar[str] = "Check the task labels for atomicity"
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
     threshold: ClassVar[float] = 0.90
+    supports_threshold_override: ClassVar[bool] = True
+    threshold_label: ClassVar[str] = "Minimum atomicity to pass"
+    threshold_hint: ClassVar[str | None] = (
+        "Labels scoring at or below this are flagged as non-atomic. "
+        "Lower it to be more lenient."
+    )
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
     @classmethod
@@ -85,11 +99,19 @@ class AtomicityCheck(Check):
         """Load spacy model required for atomicity checking"""
         load_spacy_model()
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
+        effective_threshold = threshold if threshold is not None else self.threshold
         tasks: list[ExtractedTask] = extract_all_tasks(self.model_xml)
 
         scored = [(task, atomicity_score(task.name)) for task in tasks]
-        flagged = [(task, score) for task, score in scored if score <= self.threshold]
+        flagged = [
+            (task, score) for task, score in scored if score <= effective_threshold
+        ]
 
         problematic_elements: list[str] = [task.id for task, _ in flagged]
 
@@ -133,16 +155,29 @@ class ExactDuplicateTasks(Check):
     # duplicate (below ideal -> indeterminate "?").
     threshold: ClassVar[float] = 0.90
     ideal_threshold: ClassVar[float] = 0.95
+    supports_threshold_override: ClassVar[bool] = True
+    threshold_label: ClassVar[str] = _DUP_MIN_LABEL
+    ideal_threshold_label: ClassVar[str | None] = _DUP_IDEAL_LABEL
+    threshold_hint: ClassVar[str | None] = _DUP_HINT
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
+        effective_threshold = threshold if threshold is not None else self.threshold
+        effective_ideal = (
+            ideal_threshold if ideal_threshold is not None else self.ideal_threshold
+        )
         tasks: list[ExtractedTask] = extract_all_tasks(self.model_xml)
         if len(tasks) == 0:
             raise Exception("Cannot identify exact duplicates: no tasks found")
 
-        pairs = find_fuzzy_duplicate_pairs(tasks, threshold=self.threshold)
+        pairs = find_fuzzy_duplicate_pairs(tasks, threshold=effective_threshold)
         problematic_elements, detail, fulfilled = _duplicate_result(
-            pairs, self.ideal_threshold
+            pairs, effective_ideal
         )
 
         return CheckResult(
@@ -170,16 +205,29 @@ class SemanticDuplicateTasks(Check):
     # duplicate (below ideal -> indeterminate "?").
     threshold: ClassVar[float] = 0.80
     ideal_threshold: ClassVar[float] = 0.90
+    supports_threshold_override: ClassVar[bool] = True
+    threshold_label: ClassVar[str] = _DUP_MIN_LABEL
+    ideal_threshold_label: ClassVar[str | None] = _DUP_IDEAL_LABEL
+    threshold_hint: ClassVar[str | None] = _DUP_HINT
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
+        effective_threshold = threshold if threshold is not None else self.threshold
+        effective_ideal = (
+            ideal_threshold if ideal_threshold is not None else self.ideal_threshold
+        )
         tasks: list[ExtractedTask] = extract_all_tasks(self.model_xml)
         if len(tasks) == 0:
             raise Exception("Cannot identify semantic duplicates: no tasks found")
 
-        pairs = find_semantic_duplicate_pairs(tasks, threshold=self.threshold)
+        pairs = find_semantic_duplicate_pairs(tasks, threshold=effective_threshold)
         problematic_elements, detail, fulfilled = _duplicate_result(
-            pairs, self.ideal_threshold
+            pairs, effective_ideal
         )
 
         return CheckResult(

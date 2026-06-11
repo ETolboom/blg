@@ -58,7 +58,12 @@ class TaskTypeCheck(Check):
 
         return True
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
         if inputs is None:
             # No inputs yet, extract it from the model
             tasks = extract_all_tasks(self.model_xml, allow_abstract=True)

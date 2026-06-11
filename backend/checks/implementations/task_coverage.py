@@ -38,6 +38,14 @@ class TaskCoverageCheck(Check):
     )
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.CONFIGURABLE
     threshold: ClassVar[float] = 0.8
+    supports_threshold_override: ClassVar[bool] = True
+    # Positive-framed: a reference task counts as covered when a student task is at
+    # least this similar. Lower it to match more loosely (fewer tasks flagged).
+    threshold_label: ClassVar[str] = "Count a task as covered from"
+    threshold_hint: ClassVar[str | None] = (
+        "A reference task counts as covered when a student task is at least this "
+        "similar. Lower it to match more loosely (fewer tasks flagged as missing)."
+    )
     input_scheme: ClassVar[list[CheckFormInput]] = []
     # Diagnostic sanity gate: never awards points.
     awards_points: ClassVar[bool] = False
@@ -49,7 +57,13 @@ class TaskCoverageCheck(Check):
 
         load_model()
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
+        effective_threshold = threshold if threshold is not None else self.threshold
         tasks: list[ExtractedTask] = extract_all_tasks(self.model_xml)
 
         if inputs is None:
@@ -115,14 +129,14 @@ class TaskCoverageCheck(Check):
 
         # How many reference tasks are covered by at least one student task?
         best_ref_scores = torch.max(similarity_matrix, dim=1).values
-        matched = sum(1 for s in best_ref_scores if s.item() >= self.threshold)
+        matched = sum(1 for s in best_ref_scores if s.item() >= effective_threshold)
         coverage = matched / len(reference_labels)
 
         # Expected (reference) tasks that no student task matched well enough.
         missing = [
             label
             for label, score in zip(reference_labels, best_ref_scores)
-            if score.item() < self.threshold
+            if score.item() < effective_threshold
         ]
 
         # Student tasks with no clear reference counterpart are flagged (ids for
@@ -131,12 +145,12 @@ class TaskCoverageCheck(Check):
         problematic_elements = [
             task.id
             for task, score in zip(tasks, student_best_scores)
-            if task.name and score.item() < self.threshold
+            if task.name and score.item() < effective_threshold
         ]
         unexpected = [
             task.name
             for task, score in zip(tasks, student_best_scores)
-            if task.name and score.item() < self.threshold
+            if task.name and score.item() < effective_threshold
         ]
 
         # Sanity-gate outcome (3 states):

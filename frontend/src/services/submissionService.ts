@@ -1,5 +1,5 @@
-import { apiGet, apiPatch, handleResponse } from './api';
-import { Criterion } from "@/features/rubric/types/rubric";
+import { apiGet, apiPatch, apiPost, handleResponse } from './api';
+import { Criterion, Rubric } from "@/features/rubric/types/rubric";
 
 // Sentinel "filename" that refers to the reference model rather than a submission.
 // Must match the backend REFERENCE_FILENAME (services/submissions.py).
@@ -23,6 +23,19 @@ export const submissionService = {
         return apiPatch<void>(
             `/submissions/${encodeURIComponent(filename)}`,
             JSON.stringify(criteria),
+            'application/json'
+        );
+    },
+
+    async regradeCriterionThreshold(
+        filename: string,
+        criterionId: string,
+        threshold: number | null,
+        idealThreshold: number | null
+    ): Promise<Rubric> {
+        return apiPost<Rubric>(
+            `/submissions/${encodeURIComponent(filename)}/criteria/${encodeURIComponent(criterionId)}/regrade`,
+            JSON.stringify({ threshold, ideal_threshold: idealThreshold }),
             'application/json'
         );
     },

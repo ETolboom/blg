@@ -120,6 +120,15 @@ class CheckResult(BaseModel):
     detail: CheckDetail | None = None
 
 
+class ThresholdMeta(BaseModel):
+    supports: bool = False
+    default_threshold: float | None = None
+    default_ideal_threshold: float | None = None
+    threshold_label: str | None = None
+    ideal_threshold_label: str | None = None
+    threshold_hint: str | None = None
+
+
 class Check(BaseModel, ABC):
     """Every check must implement this class."""
 
@@ -131,9 +140,12 @@ class Check(BaseModel, ABC):
     description: ClassVar[str]
     check_complexity: ClassVar[CheckComplexity]
     threshold: ClassVar[float] = 0.0
+    ideal_threshold: ClassVar[float | None] = None
+    supports_threshold_override: ClassVar[bool] = False
+    threshold_label: ClassVar[str] = "Minimum"
+    ideal_threshold_label: ClassVar[str | None] = None
+    threshold_hint: ClassVar[str | None] = None
     input_scheme: ClassVar[list[CheckFormInput]]
-    # Sanity checks (e.g. Task Coverage) are diagnostic only and contribute no
-    # points; criteria created for them default to 0 points.
     awards_points: ClassVar[bool] = True
 
     # This field must be provided at instantiation
@@ -158,8 +170,20 @@ class Check(BaseModel, ABC):
         pass  # Default: no dependencies
 
     @abstractmethod
-    def analyze(self, inputs: list[CheckFormInput] | None) -> CheckResult:
-        """Analyze a given property based on inputs if available"""
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
+        """Analyze a given property based on inputs if available.
+
+        ``threshold`` / ``ideal_threshold`` are optional per-submission overrides
+        for the check's matching cut-offs; ``None`` means "use the class default"
+        (``threshold`` / ``ideal_threshold``). Only meaningful for checks with
+        ``supports_threshold_override = True`` (and ``ideal_threshold`` only for
+        those that define one).
+        """
         pass
 
     @abstractmethod

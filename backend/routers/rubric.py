@@ -104,6 +104,10 @@ async def handle_onboarding_rubric(
                 check_complexity=result.check_complexity,
                 inputs=result.inputs,
                 default_points=1.0 if check.awards_points else 0.0,
+                supports_threshold=check.supports_threshold_override,
+                default_threshold=(
+                    check.threshold if check.supports_threshold_override else None
+                ),
             )
         )
 
@@ -224,6 +228,10 @@ async def update_criteria(
             check_complexity=result.check_complexity,
             inputs=result.inputs,
             default_points=1.0 if check.awards_points else 0.0,
+            supports_threshold=check.supports_threshold_override,
+            default_threshold=(
+                check.threshold if check.supports_threshold_override else None
+            ),
         )
     )
 

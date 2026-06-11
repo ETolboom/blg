@@ -13,6 +13,7 @@ from rubric import (
     SubmissionCriterionResult,
     SubmissionResult,
 )
+from checks import ThresholdMeta
 from utils import safe_join
 
 # Maximum accepted size for an uploaded .bpmn submission.
@@ -25,11 +26,15 @@ REFERENCE_FILENAME = "Reference"
 
 
 class SubmissionService:
-    def __init__(self, base_path: str, rubric: RubricDefinition | None):
-        """Initialize the service with the data directory path and the rubric definition."""
+    def __init__(self, base_path: str, rubric: RubricDefinition | None, check_registry=None):
+        """Initialize the service with the data directory path and the rubric
+        definition. ``check_registry`` (optional) lets composition derive each
+        criterion's threshold metadata from the live check classes, so it is
+        correct even for rubrics authored before threshold support existed."""
         self.base_path = base_path
         self.submissions_path = os.path.join(base_path, "submissions")
         self.rubric = rubric
+        self.check_registry = check_registry
 
     def list_submissions(self) -> list[dict]:
         """Return filename and display name for every .bpmn file in the submissions directory."""
@@ -94,6 +99,16 @@ class SubmissionService:
         composed: list[RubricCriterion] = []
         for ref in self.rubric.criteria:
             sr = result_map.get(ref.id)
+            # Prefer live check metadata (works for older rubrics that predate
+            # threshold support); fall back to whatever the definition stored.
+            if self.check_registry is not None:
+                meta = self.check_registry.threshold_meta(ref.id)
+            else:
+                meta = ThresholdMeta(
+                    supports=ref.supports_threshold,
+                    default_threshold=ref.default_threshold,
+                    default_ideal_threshold=ref.default_ideal_threshold,
+                )
             composed.append(
                 RubricCriterion(
                     id=ref.id,
@@ -108,6 +123,20 @@ class SubmissionService:
                     problematic_elements=sr.problematic_elements if sr else [],
                     group_result=sr.group_result if sr else None,
                     detail=sr.detail if sr else None,
+                    # Threshold support/defaults/labels derived above; the
+                    # overrides and note are per-submission deviations from the
+                    # evaluation.
+                    supports_threshold=meta.supports,
+                    default_threshold=meta.default_threshold,
+                    default_ideal_threshold=meta.default_ideal_threshold,
+                    threshold_label=meta.threshold_label,
+                    ideal_threshold_label=meta.ideal_threshold_label,
+                    threshold_hint=meta.threshold_hint,
+                    threshold_override=sr.threshold_override if sr else None,
+                    ideal_threshold_override=(
+                        sr.ideal_threshold_override if sr else None
+                    ),
+                    notes=sr.notes if sr else None,
                 )
             )
 
@@ -174,6 +203,21 @@ class SubmissionService:
 
         result.criteria = list(existing_map.values())
         self.write_eval(filename, result)
+
+    def apply_criterion_result(
+        self, filename: str, result: SubmissionCriterionResult
+    ) -> None:
+        """Overlay a single freshly-evaluated criterion onto the stored eval,
+        preserving the grader's existing note for that criterion (a re-grade
+        recomputes scoring, not the manual annotation)."""
+        existing = self._read_eval(filename) or SubmissionResult()
+        by_id = {cr.id: cr for cr in existing.criteria}
+        prev = by_id.get(result.id)
+        if prev is not None:
+            result.notes = prev.notes
+        by_id[result.id] = result
+        existing.criteria = list(by_id.values())
+        self.write_eval(filename, existing)
 
     def export_submission(self, filename: str) -> bytes:
         """Export the graded rubric for a single submission as Excel bytes."""

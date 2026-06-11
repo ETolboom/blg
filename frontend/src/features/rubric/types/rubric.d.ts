@@ -12,6 +12,24 @@ export interface Criterion extends Check {
     score: number | null;
     problematic_elements: string[];
 
+    // Per-submission deviations from the rubric definition.
+    // `supports_threshold`/`default_threshold`/`default_ideal_threshold` come from
+    // the definition; the `*_override` values (non-default matching cut-offs this
+    // submission was graded with) and `notes` come from the evaluation. The ideal
+    // fields are null for checks with a single threshold.
+    supports_threshold?: boolean;
+    default_threshold?: number | null;
+    default_ideal_threshold?: number | null;
+    threshold_override?: number | null;
+    ideal_threshold_override?: number | null;
+    notes?: string | null;
+    // Per-check labels/help for the threshold override fields, so the gear popover
+    // reads correctly (a check's "minimum" can mean opposite leniency directions).
+    // Absent for checks without overridable thresholds.
+    threshold_label?: string | null;
+    ideal_threshold_label?: string | null;
+    threshold_hint?: string | null;
+
     // Optional breakdown shown in the criterion's (i) info pop-up. Generic across
     // checks (Task Coverage: missing/extra tasks; duplicate checks: matched pairs).
     detail?: {

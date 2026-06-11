@@ -24,7 +24,12 @@ class Synchronization(Check):
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
         result = analyze_safeness(self.model_xml)
         return CheckResult(
             id=self.id,
@@ -48,7 +53,12 @@ class DeadActivity(Check):
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
         result = analyze_dead_activities(self.model_xml)
         return CheckResult(
             id=self.id,
@@ -72,7 +82,12 @@ class ProperCompletion(Check):
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
         result = analyze_proper_completion(self.model_xml)
         return CheckResult(
             id=self.id,
@@ -96,7 +111,12 @@ class OptionToComplete(Check):
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.SIMPLE
     input_scheme: ClassVar[list[CheckFormInput]] = []
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
         result = analyze_option_to_complete(self.model_xml)
         return CheckResult(
             id=self.id,

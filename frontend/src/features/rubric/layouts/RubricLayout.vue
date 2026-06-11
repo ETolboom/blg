@@ -2,7 +2,7 @@
 import {nextTick, onMounted, ref, watch} from "vue";
 import {useToast} from "primevue";
 import _ from "lodash";
-import {type Check, checkService, rubricService, behavioralRuleService, toastError, toastSuccess} from "@/services";
+import {type Check, checkService, rubricService, behavioralRuleService, submissionService, toastError, toastSuccess} from "@/services";
 import RubricSidebar from "@/features/rubric/components/RubricSidebar.vue";
 import RubricAlgorithmDialog from "@/features/rubric/components/RubricAlgorithmDialog.vue";
 import {Criterion, Rubric} from "@/features/rubric/types/rubric";
@@ -166,6 +166,36 @@ const resetCustomScore = (index: number): void => {
   criterion.fulfilled = false;
   emit('saveSubmission', props.criteria);
   calculateScore();
+};
+
+const updateThreshold = async (
+    index: number,
+    threshold: number | null,
+    idealThreshold: number | null,
+): Promise<void> => {
+  const criterion = props.criteria[index];
+  if (!criterion || !props.submissionName) return;
+
+  try {
+    const rubric = await submissionService.regradeCriterionThreshold(
+        props.submissionName, criterion.id, threshold, idealThreshold
+    );
+    emit('updateRubric', rubric);
+    const reset = threshold === null && idealThreshold === null;
+    toastSuccess(toast, 'Criterion re-graded', {
+      message: reset ? 'Thresholds reset to defaults' : 'Re-graded with new thresholds',
+    });
+  } catch (error) {
+    toastError(toast, 'Could not re-grade criterion', error);
+  }
+};
+
+const updateNotes = (index: number, notes: string | null): void => {
+  const criterion = props.criteria[index];
+  if (!criterion) return;
+
+  criterion.notes = notes;
+  emit('saveSubmission', props.criteria);
 };
 
 const openAddDialog = (category: CheckComplexity): void => {
@@ -353,6 +383,8 @@ onMounted(() => {
       @toggle-highlight="toggleHighlight"
       @toggle-state="toggleState"
       @update-points="(index, score) => updatePoints(index, String(score))"
+      @update-threshold="updateThreshold"
+      @update-notes="updateNotes"
       @edit-criterion="handleEditCriterion"
       @delete-criterion="handleDeleteCriterion"
   />

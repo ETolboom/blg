@@ -45,94 +45,107 @@ def evaluate_model(
     reference can't nuke an entire grade.
     """
     manager = registry.create_manager(model_xml)
-    results: list[SubmissionCriterionResult] = []
+    results = [
+        evaluate_criterion(crit, manager, model_xml, rule_manager)
+        for crit in criteria
+    ]
+    return SubmissionResult(criteria=results)
 
-    for crit in criteria:
-        if crit.check_complexity != CheckComplexity.COMPLEX:
-            # Standard, model-agnostic / configurable check
-            result = manager.get_check(crit.id).analyze(inputs=crit.inputs)
-            results.append(
-                SubmissionCriterionResult(
-                    id=result.id,
-                    fulfilled=result.fulfilled,
-                    confidence=result.confidence,
-                    problematic_elements=result.problematic_elements,
-                    score=None,
-                    detail=result.detail,
-                )
-            )
-            continue
 
-        # COMPLEX → behavioral group or individual rule
-        if crit.id.startswith("group:"):
-            group = rule_manager.get_group(crit.id[len("group:") :])
-            if group is None:
-                logger.warning("Group for criterion '%s' missing on disk", crit.id)
-                results.append(_unfulfilled(crit))
-                continue
+def evaluate_criterion(
+    crit: CriterionDefinition,
+    manager,
+    model_xml: str,
+    rule_manager: BehavioralRuleManager,
+    threshold: float | None = None,
+    ideal_threshold: float | None = None,
+) -> SubmissionCriterionResult:
+    """Evaluate a single criterion against one model.
 
-            evaluator = BehavioralGroupEvaluator(
-                model_xml=model_xml, rule_manager=rule_manager
-            )
-            g = evaluator.evaluate_group(group)
-            summary = GroupResultSummary(
-                best_rule_id=g.best_rule_id or None,
-                earned_points=g.earned_points,
-                rule_results=[
-                    RuleEvaluationSummary(
-                        rule_id=r.rule_id,
-                        rule_name=r.rule_name,
-                        description=r.description,
-                        earned_points=r.earned_points,
-                        confidence=r.confidence,
-                        success=r.success,
-                        problematic_elements=_problematic_from_matches(r.match_details),
-                    )
-                    for r in g.rule_results
-                ],
-            )
-            results.append(
-                SubmissionCriterionResult(
-                    id=crit.id,
-                    fulfilled=g.fulfilled,
-                    confidence=g.overall_confidence,
-                    problematic_elements=g.problematic_elements,
-                    score=_score_or_none(g.earned_points, group.maxPoints),
-                    inputs=crit.inputs,
-                    group_result=summary,
-                )
-            )
-            continue
-
-        # Individual behavioral rule
-        rule = rule_manager.get_rule(crit.id)
-        if rule is None:
-            logger.warning("Rule for criterion '%s' missing on disk", crit.id)
-            results.append(_unfulfilled(crit))
-            continue
-
-        checker = BehavioralRuleCheck(model_xml=model_xml)
-        try:
-            r = checker.check_behavior(
-                workflow=WorkflowData(nodes=rule.nodes, edges=rule.edges)
-            )
-        except Exception as e:
-            logger.warning("Rule '%s' evaluation failed: %s", crit.id, e)
-            results.append(_unfulfilled(crit))
-            continue
-
-        results.append(
-            SubmissionCriterionResult(
-                id=crit.id,
-                fulfilled=r.earned_points > 0,
-                confidence=r.confidence,
-                problematic_elements=_problematic_from_matches(r.match_details),
-                score=_score_or_none(r.earned_points, rule.maxPoints),
-                inputs=crit.inputs,
-            )
+    ``manager`` is a check manager already bound to ``model_xml``
+    (``registry.create_manager(model_xml)``). ``threshold`` / ``ideal_threshold``
+    are optional per-submission overrides for a standard check's matching
+    cut-offs; they are recorded on the result so the deviation is reproducible
+    and exportable.
+    """
+    if crit.check_complexity != CheckComplexity.COMPLEX:
+        # Standard, model-agnostic / configurable check
+        result = manager.get_check(crit.id).analyze(
+            inputs=crit.inputs,
+            threshold=threshold,
+            ideal_threshold=ideal_threshold,
+        )
+        return SubmissionCriterionResult(
+            id=result.id,
+            fulfilled=result.fulfilled,
+            confidence=result.confidence,
+            problematic_elements=result.problematic_elements,
+            score=None,
+            detail=result.detail,
+            threshold_override=threshold,
+            ideal_threshold_override=ideal_threshold,
         )
 
-    return SubmissionResult(criteria=results)
+    # COMPLEX → behavioral group or individual rule
+    if crit.id.startswith("group:"):
+        group = rule_manager.get_group(crit.id[len("group:") :])
+        if group is None:
+            logger.warning("Group for criterion '%s' missing on disk", crit.id)
+            return _unfulfilled(crit)
+
+        evaluator = BehavioralGroupEvaluator(
+            model_xml=model_xml, rule_manager=rule_manager
+        )
+        g = evaluator.evaluate_group(group)
+        summary = GroupResultSummary(
+            best_rule_id=g.best_rule_id or None,
+            earned_points=g.earned_points,
+            rule_results=[
+                RuleEvaluationSummary(
+                    rule_id=r.rule_id,
+                    rule_name=r.rule_name,
+                    description=r.description,
+                    earned_points=r.earned_points,
+                    confidence=r.confidence,
+                    success=r.success,
+                    problematic_elements=_problematic_from_matches(r.match_details),
+                )
+                for r in g.rule_results
+            ],
+        )
+        return SubmissionCriterionResult(
+            id=crit.id,
+            fulfilled=g.fulfilled,
+            confidence=g.overall_confidence,
+            problematic_elements=g.problematic_elements,
+            score=_score_or_none(g.earned_points, group.maxPoints),
+            inputs=crit.inputs,
+            group_result=summary,
+        )
+
+    # Individual behavioral rule
+    rule = rule_manager.get_rule(crit.id)
+    if rule is None:
+        logger.warning("Rule for criterion '%s' missing on disk", crit.id)
+        return _unfulfilled(crit)
+
+    checker = BehavioralRuleCheck(model_xml=model_xml)
+    try:
+        r = checker.check_behavior(
+            workflow=WorkflowData(nodes=rule.nodes, edges=rule.edges)
+        )
+    except Exception as e:
+        logger.warning("Rule '%s' evaluation failed: %s", crit.id, e)
+        return _unfulfilled(crit)
+
+    return SubmissionCriterionResult(
+        id=crit.id,
+        fulfilled=r.earned_points > 0,
+        confidence=r.confidence,
+        problematic_elements=_problematic_from_matches(r.match_details),
+        score=_score_or_none(r.earned_points, rule.maxPoints),
+        inputs=crit.inputs,
+    )
 
 
 def _unfulfilled(crit: CriterionDefinition) -> SubmissionCriterionResult:

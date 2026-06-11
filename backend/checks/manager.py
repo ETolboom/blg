@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from checks import Check, CheckFormInput
+from checks import Check, CheckFormInput, ThresholdMeta
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,25 @@ class CheckRegistry:
     def list_checks(self) -> list[dict[str, str | list[CheckFormInput]]]:
         """Return metadata for all registered checks."""
         return self.create_manager("").list_checks()
+
+    def threshold_meta(self, check_id: str) -> ThresholdMeta:
+        """Static threshold metadata for a check id, read from the class without
+        instantiating: support flag, defaults, and the UI labels/hint. The ideal
+        default is None for checks with a single threshold. Unknown ids (e.g.
+        behavioral rule/group criteria) report no threshold support."""
+        for cls in self._check_classes:
+            if cls.id == check_id:
+                if cls.supports_threshold_override:
+                    return ThresholdMeta(
+                        supports=True,
+                        default_threshold=cls.threshold,
+                        default_ideal_threshold=cls.ideal_threshold,
+                        threshold_label=cls.threshold_label,
+                        ideal_threshold_label=cls.ideal_threshold_label,
+                        threshold_hint=cls.threshold_hint,
+                    )
+                return ThresholdMeta()
+        return ThresholdMeta()
 
 
 class CheckManager:

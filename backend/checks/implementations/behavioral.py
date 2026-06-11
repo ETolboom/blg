@@ -545,7 +545,7 @@ class BehavioralRuleCheck(Check):
         model: Bpmn,
         connectors: dict[str, ConnectorNode],
         workflow: WorkflowData,
-    ) -> TraversalContext:
+    ) -> TraversalContext | None:
         """Recursively traverse workflow with branch handling"""
 
         while True:
@@ -974,8 +974,12 @@ class BehavioralRuleCheck(Check):
             total_matches=total_matches,
         )
 
-    def analyze(self, inputs: list[CheckFormInput] | None = None) -> CheckResult:
-        """Not supported — use check_behavior() instead."""
+    def analyze(
+        self,
+        inputs: list[CheckFormInput] | None = None,
+        threshold: float | None = None,
+        ideal_threshold: float | None = None,
+    ) -> CheckResult:
         raise Exception("Not applicable to behavioral rule check")
 
 

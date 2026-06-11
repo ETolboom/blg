@@ -117,7 +117,9 @@ def set_active_project(app, name: str) -> None:
         templates_dir=os.path.join(data_root, "templates"),
     )
     app.state.rubric = rubric
-    app.state.submission_service = SubmissionService(project_dir, rubric)
+    app.state.submission_service = SubmissionService(
+        project_dir, rubric, check_registry=app.state.check_registry
+    )
 
     # Populate the reference evaluation on first selection (cached thereafter;
     # kept fresh by save_rubric on any subsequent rubric/reference change).

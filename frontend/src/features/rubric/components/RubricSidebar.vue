@@ -26,6 +26,8 @@ const emit = defineEmits<{
   toggleState: [index: number];
   resetCustomScore: [index: number];
   updatePoints: [index: number, points: Number];
+  updateThreshold: [index: number, threshold: number | null, idealThreshold: number | null];
+  updateNotes: [index: number, notes: string | null];
   openAddDialog: [category: CheckComplexity];
   openBehavioralAddDialog: [];
   openAddGroupDialog: [];
@@ -150,11 +152,14 @@ const toggleSidebar = () => {
                         :title="item.name"
                         :criterion="item"
                         :is-editable="isEditable"
+                        :grading-submission="!!submissionFilename"
                         @click="emit('toggleHighlight', criteria.indexOf(item), item['problematic_elements'])"
                         @edit="emit('editCriterion', item)"
                         @reset="emit('resetCustomScore', criteria.indexOf(item))"
                         @toggle="emit('toggleState', criteria.indexOf(item))"
                         @updatePoints="(points: Number) => emit('updatePoints', criteria.indexOf(item), points)"
+                        @updateThreshold="(t: number | null, i: number | null) => emit('updateThreshold', criteria.indexOf(item), t, i)"
+                        @updateNotes="(n: string | null) => emit('updateNotes', criteria.indexOf(item), n)"
                         @delete="emit('deleteCriterion', item.id || '')"
                       />
                     </template>

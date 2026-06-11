@@ -28,6 +28,9 @@ class SubmissionCriterionResult(BaseModel):
     inputs: list[CheckFormInput] = []
     group_result: GroupResultSummary | None = None
     detail: CheckDetail | None = None
+    threshold_override: float | None = None
+    ideal_threshold_override: float | None = None
+    notes: str | None = None
 
 
 class SubmissionResult(BaseModel):
@@ -39,6 +42,15 @@ class RubricCriterion(CheckResult):
     score: float | None = None
     default_points: float = 1.0
     group_result: GroupResultSummary | None = None
+    supports_threshold: bool = False
+    default_threshold: float | None = None
+    default_ideal_threshold: float | None = None
+    threshold_override: float | None = None
+    ideal_threshold_override: float | None = None
+    notes: str | None = None
+    threshold_label: str | None = None
+    ideal_threshold_label: str | None = None
+    threshold_hint: str | None = None
 
 
 class CriterionDefinition(BaseModel):
@@ -48,6 +60,9 @@ class CriterionDefinition(BaseModel):
     description: str = ""
     default_points: float = 1.0
     inputs: list[CheckFormInput] = []
+    supports_threshold: bool = False
+    default_threshold: float | None = None
+    default_ideal_threshold: float | None = None
 
 
 class RubricDefinition(BaseModel):
@@ -95,7 +110,7 @@ class Rubric(BaseModel):
         center_alignment = Alignment(horizontal="center", vertical="center")
 
         # Add headers
-        headers = ["Criterion", "Description", "Points"]
+        headers = ["Criterion", "Description", "Points", "Threshold", "Notes"]
         for col, header in enumerate(headers, 1):
             cell = worksheet.cell(row=1, column=col, value=header)
             cell.font = header_font
@@ -111,6 +126,29 @@ class Rubric(BaseModel):
             else:
                 return max(0.0, criterion.default_points)
 
+        def _line(label, override, default) -> str | None:
+            """One threshold line, annotating the default when it was overridden."""
+            if override is not None:
+                return f"{label} {override} (default {default})"
+            if default is not None:
+                return f"{label} {default}"
+            return None
+
+        def threshold_cell(criterion) -> str:
+            """Make the deviation traceable: show the effective minimum (and ideal,
+            where the check has one) cut-offs, annotating any override."""
+            if not criterion.supports_threshold:
+                return ""
+            lines = [
+                _line("min", criterion.threshold_override, criterion.default_threshold),
+                _line(
+                    "ideal",
+                    criterion.ideal_threshold_override,
+                    criterion.default_ideal_threshold,
+                ),
+            ]
+            return "\n".join(line for line in lines if line)
+
         # Add criteria data
         current_row = 2
         for criterion in self.criteria:
@@ -119,9 +157,11 @@ class Rubric(BaseModel):
             worksheet.cell(row=current_row, column=1, value=criterion.name)
             worksheet.cell(row=current_row, column=2, value=criterion.description)
             worksheet.cell(row=current_row, column=3, value=points)
+            worksheet.cell(row=current_row, column=4, value=threshold_cell(criterion))
+            worksheet.cell(row=current_row, column=5, value=criterion.notes or "")
 
             # Apply styling
-            for col in range(1, 4):
+            for col in range(1, 6):
                 cell = worksheet.cell(row=current_row, column=col)
                 cell.border = border
                 cell.font = criterion_font
@@ -137,6 +177,8 @@ class Rubric(BaseModel):
             "A": 25,  # Criterion
             "B": 45,  # Description
             "C": 10,  # Points
+            "D": 22,  # Threshold
+            "E": 40,  # Notes
         }
 
         for col_letter, width in column_widths.items():
