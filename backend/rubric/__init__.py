@@ -127,16 +127,17 @@ class Rubric(BaseModel):
                 return max(0.0, criterion.default_points)
 
         def _line(label, override, default) -> str | None:
-            """One threshold line, annotating the default when it was overridden."""
-            if override is not None:
+            """One threshold line, emitted only when the override deviates from
+            the default. An unset (or default-equal) threshold implies the
+            default, so it is omitted to keep the column free of noise."""
+            if override is not None and override != default:
                 return f"{label} {override} (default {default})"
-            if default is not None:
-                return f"{label} {default}"
             return None
 
         def threshold_cell(criterion) -> str:
-            """Make the deviation traceable: show the effective minimum (and ideal,
-            where the check has one) cut-offs, annotating any override."""
+            """Make deviations traceable: list only the cut-offs (min and/or
+            ideal) the grader overrode away from the default; criteria graded at
+            the default thresholds leave this column blank."""
             if not criterion.supports_threshold:
                 return ""
             lines = [
