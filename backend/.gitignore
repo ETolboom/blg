@@ -10,4 +10,3 @@ __pycache__
 *.dll
 *.pyd
 *.json
-uv.lock
