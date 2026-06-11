@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import {ref, watch} from "vue";
+import {useToast} from "primevue/usetoast";
 import Stepper from 'primevue/stepper';
 import StepList from 'primevue/steplist';
 import StepPanels from 'primevue/steppanels';
@@ -14,6 +15,8 @@ import { CheckComplexityLabels, isCheckComplexity } from "@/features/rubric/type
 const emit = defineEmits<{
   onboarded: []
 }>();
+
+const toast = useToast();
 
 const pdfFileInput = ref<HTMLInputElement>();
 const pdfFileName = ref<string>();
@@ -44,12 +47,12 @@ const analyzeFile = async (): Promise<void> => {
   }
 
   if (!fileName.value || fileName.value === "") {
-    alert("Please select a file!");
+    toast.add({severity: 'warn', summary: 'No file selected', detail: 'Please select a file to analyze.', life: 4000});
     return;
   }
 
   if (!fileInput.value?.files?.[0]) {
-    alert("No file selected!");
+    toast.add({severity: 'warn', summary: 'No file selected', detail: 'Please select a file to analyze.', life: 4000});
     return;
   }
 

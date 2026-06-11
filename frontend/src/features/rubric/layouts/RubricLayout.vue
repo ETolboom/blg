@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import {nextTick, onMounted, ref, watch} from "vue";
-import {useToast} from "primevue";
+import {onMounted, ref, watch} from "vue";
+import {useToast, useConfirm} from "primevue";
 import _ from "lodash";
 import {type Check, checkService, rubricService, behavioralRuleService, submissionService, toastError, toastSuccess} from "@/services";
 import RubricSidebar from "@/features/rubric/components/RubricSidebar.vue";
@@ -27,6 +27,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const confirm = useConfirm();
 
 const totalScore = ref<number>(0);
 const correctPercentage = ref<string>("0.0");
@@ -65,44 +66,41 @@ const toggleState = (index: number): void => {
   calculateScore();
 };
 
-const clearHighlight = async (): Promise<void> => {
-  for (let i = 0; i < currentHighlightElements.value.length; i++) {
-    document.querySelectorAll(`[data-element-id="${currentHighlightElements.value[i]}"] > .djs-outline`)
-        .forEach((el) => {
-          const element = el as SVGRectElement;
-          element.style.visibility = 'hidden';
-          element.style.stroke = '';
-          element.style.fill = '';
-        });
+// Highlight via bpmn-js's own marker API (a CSS class on the element group)
+// instead of reaching into its SVG; see the `.bpmn-highlight` rule below.
+const HIGHLIGHT_MARKER = 'bpmn-highlight';
+
+const clearHighlight = (): void => {
+  const canvas = props.modeler.get('canvas');
+  for (const id of currentHighlightElements.value) {
+    canvas.removeMarker(id, HIGHLIGHT_MARKER);
   }
   currentHighlightElements.value = [];
   currentHighlightIndex.value = -1;
 };
 
-const toggleHighlight = async (index: number, problematicElements: string[]): Promise<void> => {
-  await nextTick();
-
+const toggleHighlight = (index: number, problematicElements: string[]): void => {
   // If clicking the same criterion, deselect it
   if (currentHighlightIndex.value === index) {
-    await clearHighlight();
+    clearHighlight();
     return;
   }
 
-  // Clear previous highlight if any
-  if (currentHighlightIndex.value !== -1) await clearHighlight();
+  // Clear any previous highlight before applying the new one
+  clearHighlight();
 
-  // Highlight the new criterion
-  for (let i = 0; i < problematicElements.length; i++) {
-    document.querySelectorAll(`[data-element-id="${problematicElements[i]}"] > .djs-outline`)
-        .forEach((el) =>
-            (el as SVGRectElement).style.cssText = "fill: none; stroke: red !important; visibility: visible !important;"
-        );
+  const canvas = props.modeler.get('canvas');
+  const elementRegistry = props.modeler.get('elementRegistry');
+  const applied: string[] = [];
+  for (const id of problematicElements) {
+    // The element may not exist in the currently-loaded diagram (e.g. wrong tab)
+    if (!elementRegistry.get(id)) continue;
+    canvas.addMarker(id, HIGHLIGHT_MARKER);
+    applied.push(id);
   }
 
   currentHighlightIndex.value = index;
-  currentHighlightElements.value = problematicElements;
-
-  await nextTick();
+  currentHighlightElements.value = applied;
 };
 
 
@@ -262,42 +260,47 @@ const handleSaveGroup = async (group: BehavioralRuleGroup): Promise<void> => {
   }
 };
 
-const handleDeleteCriterion = async (criterionId: string): Promise<void> => {
+const handleDeleteCriterion = (criterionId: string): void => {
   if (!criterionId) return;
-  
-  const confirmed = confirm("Are you sure you want to delete this criterion?");
-  if (!confirmed) return;
 
-  try {
-    const data = await rubricService.deleteCriterion(criterionId);
-    
-    // Refresh rubric
-    const rubric = await rubricService.getRubric();
-    emit("updateRubric", rubric);
-    
-    toastSuccess(toast, 'Rubric', data, { life: 5000 });
+  confirm.require({
+    message: "Are you sure you want to delete this criterion?",
+    header: "Delete criterion",
+    icon: "pi pi-exclamation-triangle",
+    rejectProps: { label: "Cancel", severity: "secondary", outlined: true },
+    acceptProps: { label: "Delete", severity: "danger" },
+    accept: async () => {
+      try {
+        const data = await rubricService.deleteCriterion(criterionId);
 
-    if (data.unmerged_rules && data.unmerged_rules.length > 0) {
-      toast.add({
-        severity: 'info',
-        summary: 'Unmerged',
-        detail: `Restored rules: ${data.unmerged_rules.join(', ')}`,
-        life: 7000
-      });
+        // Refresh rubric
+        const rubric = await rubricService.getRubric();
+        emit("updateRubric", rubric);
+
+        toastSuccess(toast, 'Rubric', data, { life: 5000 });
+
+        if (data.unmerged_rules && data.unmerged_rules.length > 0) {
+          toast.add({
+            severity: 'info',
+            summary: 'Unmerged',
+            detail: `Restored rules: ${data.unmerged_rules.join(', ')}`,
+            life: 7000
+          });
+        }
+
+        if (data.warning) {
+          toast.add({
+            severity: 'warn',
+            summary: 'Warning',
+            detail: data.warning,
+            life: 10000
+          });
+        }
+      } catch (error) {
+        toastError(toast, 'Rubric', error, { life: 10000 });
+      }
     }
-    
-    if (data.warning) {
-      toast.add({
-        severity: 'warn',
-        summary: 'Warning',
-        detail: data.warning,
-        life: 10000
-      });
-    }
-    
-  } catch (error) {
-    toastError(toast, 'Rubric', error, { life: 10000 });
-  }
+  });
 };
 
 
@@ -387,4 +390,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
+</style>
+
+<!-- Global (unscoped): bpmn-js renders its SVG outside this component's tree, and
+     the `bpmn-highlight` marker class is added by canvas.addMarker (see toggleHighlight). -->
+<style>
+.djs-element.bpmn-highlight .djs-outline {
+  visibility: visible !important;
+  stroke: #ef4444 !important; /* tailwind red-500 */
+  fill: none;
+}
 </style>

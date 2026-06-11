@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import router from './router'
 import ToastService from 'primevue/toastservice';
+import ConfirmationService from 'primevue/confirmationservice';
 import PrimeVue from 'primevue/config';
 import Aura from '@primeuix/themes/aura';
 import Toast from 'primevue/toast';
@@ -26,6 +27,7 @@ app.use(PrimeVue, {
 app.component('Toast', Toast);
 app.directive('tooltip', Tooltip);
 app.use(ToastService);
+app.use(ConfirmationService);
 app.use(router);
 app.mount('#app');
 

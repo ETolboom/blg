@@ -21,6 +21,12 @@ declare module 'bpmn-js/lib/Modeler' {
         getContainer(): HTMLElement;
 
         resized(): void;
+
+        addMarker(element: ModdleElement | string, marker: string): void;
+
+        removeMarker(element: ModdleElement | string, marker: string): void;
+
+        hasMarker(element: ModdleElement | string, marker: string): boolean;
     }
 
     export interface ZoomScroll {

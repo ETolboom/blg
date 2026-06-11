@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ref, watch, computed } from "vue";
-import { Button, Dialog, InputText, MultiSelect, RadioButton } from "primevue";
+import { Button, Dialog, InputText, MultiSelect, RadioButton, useConfirm } from "primevue";
 
 import type { BehavioralRule } from "@/features/behavior/types/template";
 import type { BehavioralRuleGroup, GroupCondition } from "@/features/behavior/types/group";
@@ -17,6 +17,8 @@ const emit = defineEmits<{
   'update:visible': [visible: boolean];
   'save': [group: BehavioralRuleGroup];
 }>();
+
+const confirm = useConfirm();
 
 const groupId = ref('');
 const name = ref('');
@@ -55,29 +57,7 @@ watch(name, (newName) => {
   groupId.value = generateIdFromName(newName);
 });
 
-const handleSave = () => {
-  // Validation
-  if (!groupId.value || !name.value || !selectedRules.value.length) {
-    return;
-  }
-
-  // Check for consumption
-  if (props.existingCriteria && props.existingCriteria.length > 0) {
-    const rulesToConsume = props.existingCriteria
-      .filter(c => selectedRules.value.some(t => t.id === c.id))
-      .map(c => c.name);
-
-    if (rulesToConsume.length > 0) {
-      const confirmed = confirm(
-        `Creating this group will consume the following individual rules:\n\n` +
-        rulesToConsume.map(t => `• ${t}`).join('\n') +
-        `\n\nThey will be removed from the rubric list and merged into this group.\n\nContinue?`
-      );
-
-      if (!confirmed) return;
-    }
-  }
-
+const emitGroup = () => {
   const group: BehavioralRuleGroup = {
     group_id: groupId.value,
     name: name.value,
@@ -88,6 +68,34 @@ const handleSave = () => {
 
   emit('save', group);
   emit('update:visible', false);
+};
+
+const handleSave = () => {
+  // Validation
+  if (!groupId.value || !name.value || !selectedRules.value.length) {
+    return;
+  }
+
+  // Check for consumption
+  const rulesToConsume = (props.existingCriteria ?? [])
+    .filter(c => selectedRules.value.some(t => t.id === c.id))
+    .map(c => c.name);
+
+  if (rulesToConsume.length > 0) {
+    confirm.require({
+      header: 'Merge rules into group',
+      message:
+        `Creating this group will consume these individual rules: ${rulesToConsume.join(', ')}. ` +
+        `They will be removed from the rubric list and merged into this group. Continue?`,
+      icon: 'pi pi-exclamation-triangle',
+      rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
+      acceptProps: { label: 'Merge' },
+      accept: emitGroup
+    });
+    return;
+  }
+
+  emitGroup();
 };
 
 const handleClose = () => {
