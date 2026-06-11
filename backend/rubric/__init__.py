@@ -81,7 +81,7 @@ class OnboardingRubric(BaseModel):
 
 class Rubric(BaseModel):
     criteria: list[RubricCriterion]
-    assignment: Assignment | None
+    assignment: Assignment | None = None
 
     def to_disk_json(self) -> str:
         """Serialize the rubric to JSON, excluding the reference XML."""

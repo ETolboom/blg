@@ -88,9 +88,8 @@ class RuleEvaluationSummary(BaseModel):
     earned_points: float
     confidence: float
     success: bool
-    # BPMN element ids the rule flagged, so the frontend can highlight per-rule
-    # problems inside a group without needing the full match_details.
     problematic_elements: list[str] = []
+    match_details: list[dict] = []
 
 
 class BehavioralRuleGroup(BaseModel):

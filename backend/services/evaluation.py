@@ -109,6 +109,7 @@ def evaluate_criterion(
                     confidence=r.confidence,
                     success=r.success,
                     problematic_elements=_problematic_from_matches(r.match_details),
+                    match_details=[m.model_dump() for m in r.match_details],
                 )
                 for r in g.rule_results
             ],

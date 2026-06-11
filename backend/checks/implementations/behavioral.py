@@ -148,8 +148,7 @@ class ConnectorNode(BaseModel):
         return self.visit_count >= self.minimum_visit_count
 
 
-@dataclass
-class MatchDetail:
+class MatchDetail(BaseModel):
     """Detailed information about a single match"""
 
     workflow_node_id: str
@@ -160,11 +159,11 @@ class MatchDetail:
     distance: int
     ideal_distance: int
     max_distance: int
-    minimal_match_threshold: float  # Minimum acceptable threshold (default: 0.6)
-    ideal_match_threshold: float  # Ideal threshold (default: 0.8)
-    is_correct: bool  # True if match_score >= minimal_match_threshold
-    is_ideal_distance: bool  # True if distance == ideal_distance
-    is_ideal_match: bool  # True if match_score >= ideal_match_threshold
+    minimal_match_threshold: float
+    ideal_match_threshold: float
+    is_correct: bool
+    is_ideal_distance: bool
+    is_ideal_match: bool
 
 
 @dataclass
