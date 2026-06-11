@@ -18,7 +18,7 @@ function trackPopoverClose(popover: Dismissable): void {
 
 <script lang="ts" setup>
 import {Check, Edit, ExternalLink, Info, Settings, Split, StickyNote, XIcon, Trash2} from "lucide-vue-next";
-import {computed, ref, watch} from "vue";
+import {computed, nextTick, ref, useTemplateRef, watch} from "vue";
 import Popover from "primevue/popover";
 import {CheckComplexity} from "@/features/rubric/types/check_complexity.ts";
 import type {Criterion} from "@/features/rubric/types/rubric";
@@ -180,11 +180,14 @@ function resetThresholds() {
 
 const editing = ref(false);
 const draft = ref(props.points);
+// Template ref (instance-scoped) — a document-global id="points-input" would
+// collide across the many criterion cards rendered at once.
+const pointsInput = useTemplateRef<HTMLInputElement>('pointsInput');
 
 function startEdit() {
   editing.value = true;
   draft.value = props.points;
-  setTimeout(() => (document.getElementById('points-input') as HTMLInputElement)?.select(), 0);
+  void nextTick(() => pointsInput.value?.select());
 }
 
 function finishEdit() {
@@ -199,64 +202,47 @@ function finishEdit() {
   <div class="flex flex-col bg-white border min-h-28 h-auto w-full px-2 rounded-md shadow-sm transition-all duration-200">
     <div class="flex flex-row min-h-28 w-full">
     <div class="flex flex-col justify-start items-center py-2">
-      <template v-if="state === null">
-        <div class="bg-yellow-600 cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm">
-          <span class="text-3xl text-white">?</span>
-        </div>
-        <p class="bg-gray-50 text-gray-700 border border-gray-200 w-full h-8 flex justify-center items-center font-semibold rounded-b-sm">
-          {{ props.points }}</p>
-      </template>
-      <template v-else-if="state">
-        <div v-if="custom_score_set"
-             class="bg-orange-400 text-white cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm"
-             @click.stop="$emit('reset')">
-          <Split :size="36"/>
-        </div>
-        <div v-else
-             class="bg-green-600 text-white cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm"
-             @click.stop="$emit('toggle')">
-          <Check :size="36"/>
-        </div>
-        <input
-            v-if="editing"
-            id="points-input"
-            v-model.number="draft"
-            class="bg-gray-50 text-gray-700 border border-gray-200 w-16 h-8 flex justify-center items-center font-semibold rounded-b-sm text-center outline-none"
-            step="0.1"
-            type="number"
-            @blur="finishEdit"
-            @keyup.enter="finishEdit"
-        />
-        <p
-            v-else
-            class="bg-gray-50 text-gray-700 border border-gray-200 w-full h-8 flex justify-center items-center font-semibold rounded-b-sm cursor-pointer select-none"
-            @dblclick="startEdit"
-        >
-          {{ props.points }}
-        </p>
-      </template>
-      <template v-else-if="!state">
-        <div class="bg-red-600 text-white cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm"
-             @click.stop="$emit('toggle')">
-          <XIcon :size="36"/>
-        </div>
-        <input
-            v-if="editing"
-            id="points-input"
-            v-model.number="draft"
-            class="bg-gray-50 text-gray-700 border border-gray-200 w-16 h-8 flex justify-center items-center font-semibold rounded-b-sm text-center outline-none"
-            step="0.1"
-            type="number"
-            @blur="finishEdit"
-            @keyup.enter="finishEdit"
-        />
-        <p
-            v-else
-            class="bg-gray-50 text-gray-700 border border-gray-200 w-full h-8 flex justify-center items-center font-semibold rounded-b-sm cursor-pointer select-none"
-            @dblclick="startEdit"
-        >
-          {{ props.points }}</p>
-      </template>
+      <!-- Status box (varies by state) -->
+      <div v-if="state === null" class="bg-yellow-600 cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm">
+        <span class="text-3xl text-white">?</span>
+      </div>
+      <button v-else-if="state && custom_score_set" type="button" aria-label="Reset to default score"
+           class="bg-orange-400 text-white cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+           @click.stop="$emit('reset')">
+        <Split :size="36"/>
+      </button>
+      <button v-else-if="state" type="button" aria-label="Mark as not fulfilled"
+           class="bg-green-600 text-white cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+           @click.stop="$emit('toggle')">
+        <Check :size="36"/>
+      </button>
+      <button v-else type="button" aria-label="Mark as fulfilled"
+           class="bg-red-600 text-white cursor-pointer flex justify-center items-center h-16 w-16 rounded-t-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+           @click.stop="$emit('toggle')">
+        <XIcon :size="36"/>
+      </button>
+
+      <!-- Points: read-only when ungraded (state === null), editable otherwise -->
+      <p v-if="state === null"
+         class="bg-gray-50 text-gray-700 border border-gray-200 w-full h-8 flex justify-center items-center font-semibold rounded-b-sm">
+        {{ props.points }}</p>
+      <input
+          v-else-if="editing"
+          ref="pointsInput"
+          v-model.number="draft"
+          class="bg-gray-50 text-gray-700 border border-gray-200 w-16 h-8 flex justify-center items-center font-semibold rounded-b-sm text-center outline-none"
+          step="0.1"
+          type="number"
+          @blur="finishEdit"
+          @keyup.enter="finishEdit"
+      />
+      <p
+          v-else
+          class="bg-gray-50 text-gray-700 border border-gray-200 w-full h-8 flex justify-center items-center font-semibold rounded-b-sm cursor-pointer select-none"
+          @dblclick="startEdit"
+      >
+        {{ props.points }}
+      </p>
     </div>
     <div class="my-2 bg-gray-50 border border-gray-200 rounded-sm flex-1 min-w-0 ml-2 p-2 flex flex-col relative">
       <div class="flex items-center gap-2 pb-2">

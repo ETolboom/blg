@@ -15,17 +15,19 @@ const emit = defineEmits<{
 
 const NO_TEMPLATE = {name: 'No Template', id: '__no_template__'} as const;
 
-const selectedTemplate = ref<any>(NO_TEMPLATE);
+// The Select offers the "No Template" sentinel alongside the real rules.
+type TemplateOption = BehavioralRule | typeof NO_TEMPLATE;
+const isNoTemplate = (t: TemplateOption): t is typeof NO_TEMPLATE => t.id === NO_TEMPLATE.id;
+
+const selectedTemplate = ref<TemplateOption>(NO_TEMPLATE);
 const customName = ref<string>('');
 const customDescription = ref<string>('');
 
-const templateOptions = computed(() => {
+const templateOptions = computed<TemplateOption[]>(() => {
   return [NO_TEMPLATE, ...props.availableTemplates];
 });
 
-const isNoTemplateSelected = computed(() => {
-  return selectedTemplate.value === NO_TEMPLATE || selectedTemplate.value?.id === '__no_template__';
-});
+const isNoTemplateSelected = computed(() => isNoTemplate(selectedTemplate.value));
 
 const isFormValid = computed(() => {
   return customName.value.trim().length > 0 && customDescription.value.trim().length > 0;
@@ -42,13 +44,14 @@ const generateIdFromName = (name: string): string => {
 const handleSave = (): void => {
   if (!isFormValid.value) return;
 
+  const template = selectedTemplate.value;
   const ruleToSave: BehavioralRule = {
     id: generateIdFromName(customName.value),
     name: customName.value.trim(),
     description: customDescription.value.trim(),
     maxPoints: 0,
-    nodes: isNoTemplateSelected.value ? [] : (selectedTemplate.value.nodes || []),
-    edges: isNoTemplateSelected.value ? [] : (selectedTemplate.value.edges || [])
+    nodes: isNoTemplate(template) ? [] : (template.nodes || []),
+    edges: isNoTemplate(template) ? [] : (template.edges || [])
   };
 
   emit('save', ruleToSave);
@@ -66,8 +69,8 @@ watch(() => props.visible, (newValue) => {
   }
 });
 
-watch(selectedTemplate, (newTemplate: any): void => {
-  if (!newTemplate || newTemplate.id === '__no_template__') {
+watch(selectedTemplate, (newTemplate: TemplateOption): void => {
+  if (isNoTemplate(newTemplate)) {
     customName.value = '';
     customDescription.value = '';
     return;

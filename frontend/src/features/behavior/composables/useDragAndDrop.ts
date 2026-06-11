@@ -3,6 +3,11 @@ import {useVueFlow} from '@vue-flow/core';
 import {ref, type Ref, watch} from 'vue';
 import {getDefaultNodeData, type NodeType} from '../types/nodeRegistry.ts';
 
+// Module-level (singleton) on purpose: this counter persists for the lifetime of
+// the module, including across in-app navigations between rules. That is safe
+// because getId() reconciles against the nodes actually on the canvas before each
+// use — if the persisted counter is stale (e.g. a different rule was opened), it
+// jumps past the highest existing dndnode_N so it can never hand out a colliding id.
 let id = 0;
 const getId = (existingNodes: Node[]): string => {
     // Find the highest existing dndnode ID to avoid collisions
@@ -23,6 +28,9 @@ const getId = (existingNodes: Node[]): string => {
     return `dndnode_${id++}`;
 };
 
+// Shared singleton state, intentionally not per-call: the drag source (BehaviorSidebar)
+// and the drop target (BehaviorView canvas) each call useDragAndDrop() separately and
+// must observe the *same* in-flight drag, so these refs live at module scope.
 const state = {
     draggedType: ref<NodeType | null>(null),
     isDragOver: ref<boolean>(false),

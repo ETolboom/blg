@@ -83,15 +83,16 @@ onMounted(loadProjects);
         </div>
 
         <ul v-else class="divide-y divide-gray-100">
-          <li
-            v-for="name in projects"
-            :key="name"
-            class="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-blue-50 transition-colors"
-            :class="{ 'opacity-50 pointer-events-none': isBusy }"
-            @click="openProject(name)"
-          >
-            <FolderOpen :size="20" class="text-blue-500 shrink-0" />
-            <span class="font-medium text-gray-800">{{ name }}</span>
+          <li v-for="name in projects" :key="name">
+            <button
+              type="button"
+              :disabled="isBusy"
+              class="w-full text-left flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
+              @click="openProject(name)"
+            >
+              <FolderOpen :size="20" class="text-blue-500 shrink-0" />
+              <span class="font-medium text-gray-800">{{ name }}</span>
+            </button>
           </li>
         </ul>
       </div>
