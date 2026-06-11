@@ -117,8 +117,8 @@ async def regrade_criterion_threshold(
         raise HTTPException(
             status_code=404, detail=f"Criterion '{criterion_id}' not found in rubric"
         )
-    supports, default_min, default_ideal = registry.threshold_meta(criterion_id)
-    if not supports:
+    meta = registry.threshold_meta(criterion_id)
+    if not meta.supports:
         raise HTTPException(
             status_code=400,
             detail=f"Criterion '{criterion_id}' does not support a threshold override",
@@ -129,8 +129,8 @@ async def regrade_criterion_threshold(
     def _deviation(value: float | None, default: float | None) -> float | None:
         return None if value is None or value == default else value
 
-    threshold = _deviation(body.threshold, default_min)
-    ideal_threshold = _deviation(body.ideal_threshold, default_ideal)
+    threshold = _deviation(body.threshold, meta.default_threshold)
+    ideal_threshold = _deviation(body.ideal_threshold, meta.default_ideal_threshold)
 
     model_xml = service.get_submission_xml(filename)
     manager = registry.create_manager(model_xml)

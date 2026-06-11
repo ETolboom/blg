@@ -12,10 +12,11 @@ let id = 0;
 const getId = (existingNodes: Node[]): string => {
     // Find the highest existing dndnode ID to avoid collisions
     const maxId = existingNodes.reduce((max, node) => {
-        const match = node.id.match(/^dndnode_(\d+)$/);
-        if (match) {
-            const nodeNum = parseInt(match[1], 10);
-            return Math.max(max, nodeNum);
+        // Capture group is `string | undefined` under noUncheckedIndexedAccess;
+        // the undefined check narrows it to string before parseInt.
+        const digits = node.id.match(/^dndnode_(\d+)$/)?.[1];
+        if (digits !== undefined) {
+            return Math.max(max, parseInt(digits, 10));
         }
         return max;
     }, -1);
