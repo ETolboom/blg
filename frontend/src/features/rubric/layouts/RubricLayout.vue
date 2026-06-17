@@ -13,6 +13,7 @@ import RubricBehavioralDialog from "@/features/rubric/components/RubricBehaviora
 import RubricGroupDialog from "@/features/rubric/components/RubricGroupDialog.vue";
 import {BehavioralRuleGroup} from "@/features/behavior/types/group";
 import {groupService} from "@/services/groupService";
+import {useCounterExampleReplay} from "@/features/grading/composables/useCounterExampleReplay";
 
 const props = defineProps<{
   modeler: BpmnModeler;
@@ -68,28 +69,47 @@ const toggleState = (index: number): void => {
   calculateScore();
 };
 
-// Highlight via bpmn-js's own marker API (a CSS class on the element group)
-// instead of reaching into its SVG; see the `.bpmn-highlight` rule below.
+// Selecting a criterion either highlights its problematic elements (via bpmn-js's
+// own marker API — a CSS class on the element group; see the `.bpmn-highlight`
+// rule below) or, for a control-flow criterion that carries a counterexample,
+// opens the token replay instead. Only one criterion is "active" at a time, so
+// switching/deselecting tears down whichever visualization is showing.
 const HIGHLIGHT_MARKER = 'bpmn-highlight';
+const replay = useCounterExampleReplay();
+const replayActive = ref<boolean>(false);
 
-const clearHighlight = (): void => {
+const clearSelection = (): void => {
   const canvas = props.modeler.get('canvas');
   for (const id of currentHighlightElements.value) {
     canvas.removeMarker(id, HIGHLIGHT_MARKER);
   }
   currentHighlightElements.value = [];
+  if (replayActive.value) {
+    replay.stop(props.modeler);
+    replayActive.value = false;
+  }
   currentHighlightIndex.value = -1;
 };
 
-const toggleHighlight = (index: number, problematicElements: string[]): void => {
-  // If clicking the same criterion, deselect it
+const selectCriterion = (index: number, problematicElements: string[]): void => {
+  // If clicking the same criterion, deselect it (and stop any replay).
   if (currentHighlightIndex.value === index) {
-    clearHighlight();
+    clearSelection();
     return;
   }
 
-  // Clear any previous highlight before applying the new one
-  clearHighlight();
+  // Clear any previous selection before applying the new one.
+  clearSelection();
+
+  const criterion = props.criteria[index];
+
+  // A control-flow counterexample opens the token replay instead of a static
+  // highlight (deadlock/safeness/proper completion).
+  if (criterion?.counter_example && replay.start(props.modeler, criterion)) {
+    replayActive.value = true;
+    currentHighlightIndex.value = index;
+    return;
+  }
 
   const canvas = props.modeler.get('canvas');
   const elementRegistry = props.modeler.get('elementRegistry');
@@ -105,7 +125,9 @@ const toggleHighlight = (index: number, problematicElements: string[]): void => 
   currentHighlightElements.value = applied;
 };
 
-
+// Expose a teardown so the parent (GradingView) can clear the selection (stopping
+// any replay) when the diagram changes underneath it (e.g. switching tabs).
+defineExpose({ clearSelection });
 
 const fetchAvailableChecks = async (): Promise<void> => {
   try {
@@ -411,7 +433,7 @@ onMounted(() => {
       @open-behavioral-add-dialog="openBehavioralAddDialog"
       @open-add-group-dialog="openGroupAddDialog"
       @reset-custom-score="resetCustomScore"
-      @toggle-highlight="toggleHighlight"
+      @toggle-highlight="selectCriterion"
       @toggle-state="toggleState"
       @update-points="(index, score) => updatePoints(index, String(score))"
       @update-threshold="updateThreshold"

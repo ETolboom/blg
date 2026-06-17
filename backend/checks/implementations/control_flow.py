@@ -12,7 +12,16 @@ from checks import (
     CheckComplexity,
     CheckFormInput,
     CheckResult,
+    CounterExample,
 )
+
+
+def _parse_counter_example(raw: str | None) -> CounterExample | None:
+    """The bindings return the counterexample as a JSON string (or None when the
+    property holds). Parse it into the typed model for the API contract."""
+    if not raw:
+        return None
+    return CounterExample.model_validate_json(raw)
 
 
 class Synchronization(Check):
@@ -38,6 +47,7 @@ class Synchronization(Check):
             check_complexity=self.check_complexity,
             fulfilled=result.fulfilled,
             problematic_elements=result.problematic_elements,
+            counter_example=_parse_counter_example(result.counter_example),
         )
 
     def is_applicable(self) -> bool:
@@ -67,6 +77,7 @@ class DeadActivity(Check):
             check_complexity=self.check_complexity,
             fulfilled=result.fulfilled,
             problematic_elements=result.problematic_elements,
+            counter_example=_parse_counter_example(result.counter_example),
         )
 
     def is_applicable(self) -> bool:
@@ -96,6 +107,7 @@ class ProperCompletion(Check):
             check_complexity=self.check_complexity,
             fulfilled=result.fulfilled,
             problematic_elements=result.problematic_elements,
+            counter_example=_parse_counter_example(result.counter_example),
         )
 
     def is_applicable(self) -> bool:
@@ -125,6 +137,7 @@ class OptionToComplete(Check):
             check_complexity=self.check_complexity,
             fulfilled=result.fulfilled,
             problematic_elements=result.problematic_elements,
+            counter_example=_parse_counter_example(result.counter_example),
         )
 
     def is_applicable(self) -> bool:

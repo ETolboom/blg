@@ -5,7 +5,13 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from pydantic import BaseModel
 
-from checks import CheckComplexity, CheckDetail, CheckFormInput, CheckResult
+from checks import (
+    CheckComplexity,
+    CheckDetail,
+    CheckFormInput,
+    CheckResult,
+    CounterExample,
+)
 from rules.manager import RuleEvaluationSummary
 
 
@@ -29,6 +35,7 @@ class SubmissionCriterionResult(BaseModel):
     inputs: list[CheckFormInput] = []
     group_result: GroupResultSummary | None = None
     detail: CheckDetail | None = None
+    counter_example: CounterExample | None = None
     threshold_override: float | None = None
     ideal_threshold_override: float | None = None
     # Grader annotations split by audience: internal notes stay between graders,

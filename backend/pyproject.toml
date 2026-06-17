@@ -31,7 +31,7 @@ dependencies = [
     "pip>=25.3",
     "pydantic>=2.12.4",
     "python-multipart>=0.0.22",
-    "rust_bpmn_analyzer-bindings>=0.1.1",
+    "rust_bpmn_analyzer-bindings>=0.2.0",
     "scikit-learn>=1.7.2",
     "scipy>=1.15.3",
     "sentence-transformers>=5.2.3",
@@ -50,8 +50,6 @@ fixable = ["ALL"]
 quote-style = "double"
 
 [dependency-groups]
-# Tooling needed to develop/test/lint — never imported by the running app, so it
-# stays out of [project].dependencies. `uv sync` installs these by default.
 dev = [
     "pytest>=8.0",
     "httpx>=0.27",

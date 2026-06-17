@@ -129,6 +129,7 @@ class SubmissionService:
                     problematic_elements=sr.problematic_elements if sr else [],
                     group_result=sr.group_result if sr else None,
                     detail=sr.detail if sr else None,
+                    counter_example=sr.counter_example if sr else None,
                     # Threshold support/defaults/labels derived above; the
                     # overrides and notes are per-submission deviations from the
                     # evaluation.

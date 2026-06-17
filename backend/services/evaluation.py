@@ -97,6 +97,7 @@ def evaluate_criterion(
             problematic_elements=result.problematic_elements,
             score=None,
             detail=result.detail,
+            counter_example=result.counter_example,
             threshold_override=threshold,
             ideal_threshold_override=ideal_threshold,
         )

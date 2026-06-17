@@ -104,6 +104,38 @@ class CheckDetail(BaseModel):
     sections: list[CheckDetailSection] = []
 
 
+class CounterExampleSnapshot(BaseModel):
+    """Token marking of one process (or sub-process) instance in a state:
+    ``tokens`` maps a flow-element id to the number of tokens sitting on it."""
+
+    id: str
+    tokens: dict[str, int] = {}
+
+
+class CounterExampleState(BaseModel):
+    """A single reachable state in a counterexample trace."""
+
+    snapshots: list[CounterExampleSnapshot] = []
+    messages: dict[str, int] = {}
+    executed_end_event_counter: dict[str, int] = {}
+
+
+class CounterExampleTransition(BaseModel):
+    """One step of the trace: firing the flow node ``label`` yields ``next_state``."""
+
+    label: str
+    next_state: CounterExampleState
+
+
+class CounterExample(BaseModel):
+    """The path from the start state to the first problematic state, used by the
+    front-end to animate a token replay showing *how* a control-flow violation
+    (e.g. a deadlock) is reached. Produced by the Rust analyzer bindings."""
+
+    start_state: CounterExampleState
+    transitions: list[CounterExampleTransition] = []
+
+
 class CheckResult(BaseModel):
     """This class describes the format in which the algorithm is presented."""
 
@@ -118,6 +150,8 @@ class CheckResult(BaseModel):
     problematic_elements: list[str] = []
     inputs: list[CheckFormInput] = []
     detail: CheckDetail | None = None
+    # Token-replay trace for control-flow violations; None when not applicable.
+    counter_example: CounterExample | None = None
 
 
 class ThresholdMeta(BaseModel):

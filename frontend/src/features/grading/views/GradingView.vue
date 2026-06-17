@@ -23,6 +23,7 @@ const toast = useToast();
 const router = useRouter();
 
 const bpmn = useTemplateRef<HTMLDivElement>("bpmn-container");
+const rubricLayout = useTemplateRef<InstanceType<typeof RubricLayout>>("rubric-layout");
 const modeler = shallowRef<BpmnModeler>();
 const rubric = ref<RubricType>();
 const submission_name = ref<string>();
@@ -170,6 +171,9 @@ const toggleReference = async () => {
 const activeTab = ref<TabValue>(TAB.REFERENCE);
 
 const onTabChange = async (value: string | number) => {
+  // Clear the active criterion (stopping any token replay) before the diagram is
+  // swapped underneath it, so stale token overlays/animations don't linger.
+  rubricLayout.value?.clearSelection();
   activeTab.value = String(value) as TabValue;
   await nextTick();
   // Only swap the reference model when going to the Reference tab;
@@ -183,6 +187,8 @@ const onTabChange = async (value: string | number) => {
 const gradeSubmission = async (filename: string, model_xml: string) => {
   if (!rubric.value) return;
 
+  // A new submission diagram is about to load; clear the active criterion/replay.
+  rubricLayout.value?.clearSelection();
   isLoading.value = true;
   submission_name.value = filename;
   submission_xml.value = model_xml;
@@ -341,6 +347,7 @@ const onOnboarded = async () => {
         </Tabs>
       </div>
       <RubricLayout v-if="isModelerReady && modeler && rubric"
+                    ref="rubric-layout"
                     :criteria="rubric.criteria"
                     :modeler="modeler!"
                     :is-editable="activeTab !== TAB.SUBMISSION"

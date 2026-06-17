@@ -47,6 +47,11 @@ export interface Criterion extends Check {
         }[];
     };
 
+    // Token-replay trace for a failing control-flow criterion (deadlock, safeness,
+    // proper completion). Present only when the analyzer found a counterexample;
+    // drives the on-diagram replay (see useCounterExampleReplay).
+    counter_example?: CounterExample | null;
+
     // Template/Behavior specific
     nodes?: Node[];
     edges?: Edge[];
@@ -71,6 +76,29 @@ export interface Criterion extends Check {
         earned_points: number;
         rule_results: RuleEvaluationResult[];
     };
+}
+
+// Counterexample trace (as delivered by the backend: token/message counts are
+// plain JSON objects keyed by BPMN element id). See backend/checks CounterExample.
+export interface CounterExampleSnapshot {
+    id: string;
+    tokens: Record<string, number>;
+}
+
+export interface CounterExampleState {
+    snapshots: CounterExampleSnapshot[];
+    messages: Record<string, number>;
+    executed_end_event_counter?: Record<string, number>;
+}
+
+export interface CounterExampleTransition {
+    label: string;
+    next_state: CounterExampleState;
+}
+
+export interface CounterExample {
+    start_state: CounterExampleState;
+    transitions: CounterExampleTransition[];
 }
 
 export interface Assignment {
