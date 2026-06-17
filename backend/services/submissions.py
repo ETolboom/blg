@@ -37,10 +37,16 @@ class SubmissionService:
         self.check_registry = check_registry
 
     def list_submissions(self) -> list[dict]:
-        """Return filename and display name for every .bpmn file in the submissions directory."""
+        """Return filename, display name and analyzed flag for every .bpmn file
+        in the submissions directory. ``analyzed`` is True when a per-model
+        evaluation exists — only analyzed submissions can be exported."""
         os.makedirs(self.submissions_path, exist_ok=True)
         return [
-            {"filename": f, "name": f.removesuffix(".bpmn")}
+            {
+                "filename": f,
+                "name": f.removesuffix(".bpmn"),
+                "analyzed": os.path.exists(self._eval_path(f)),
+            }
             for f in os.listdir(self.submissions_path)
             if f.endswith(".bpmn")
         ]
@@ -219,28 +225,34 @@ class SubmissionService:
         existing.criteria = list(by_id.values())
         self.write_eval(filename, existing)
 
-    def export_submission(self, filename: str) -> bytes:
-        """Export the graded rubric for a single submission as Excel bytes."""
-        parsed_rubric = self.compose_rubric(filename)
-        return parsed_rubric.to_excel(filename)
+    def export_submissions(
+        self,
+        filenames: list[str],
+        include_thresholds: bool = True,
+        include_notes: bool = True,
+    ) -> bytes:
+        """Export the graded rubrics for the given submissions into one workbook,
+        a worksheet per submission. ``include_thresholds``/``include_notes``
+        toggle the optional Threshold/Notes columns."""
+        if not filenames:
+            raise HTTPException(
+                status_code=400, detail="No submissions selected for export"
+            )
 
-    def export_all_submissions(self) -> bytes:
-        """Export graded rubrics for all analyzed submissions as a multi-sheet Excel workbook."""
-        json_files = [
-            f for f in os.listdir(self.submissions_path) if f.endswith(".json")
-        ]
-
-        excel_buffer = io.BytesIO()
         workbook = Workbook()
+        for filename in filenames:
+            self.compose_rubric(filename).to_excel_worksheet(
+                workbook,
+                filename.removesuffix(".bpmn"),
+                include_threshold=include_thresholds,
+                include_notes=include_notes,
+            )
 
-        for json_file in json_files:
-            bpmn_filename = json_file.replace(".json", "")
-            parsed_rubric = self.compose_rubric(bpmn_filename)
-            parsed_rubric.to_excel_worksheet(workbook, bpmn_filename)
-
-        if "Sheet" in workbook.sheetnames:
+        # Drop openpyxl's empty default sheet — but only once we've added our own,
+        # since a workbook must keep at least one sheet.
+        if len(workbook.sheetnames) > 1 and "Sheet" in workbook.sheetnames:
             workbook.remove(workbook["Sheet"])
 
-        workbook.save(excel_buffer)
-        excel_buffer.seek(0)
-        return excel_buffer.getvalue()
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        return buffer.getvalue()

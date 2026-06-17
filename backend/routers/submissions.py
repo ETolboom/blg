@@ -1,7 +1,4 @@
-import io
-
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
-from openpyxl import Workbook
 from pydantic import BaseModel
 
 from checks.manager import CheckRegistry
@@ -27,44 +24,35 @@ async def get_submissions_list(
     return service.list_submissions()
 
 
-@router.get("/submissions/export")
-async def export_submission(
-    filename: str, service: SubmissionService = Depends(get_submission_service)
+class ExportRequest(BaseModel):
+    filenames: list[str]
+    include_thresholds: bool = True
+    include_notes: bool = True
+
+
+@router.post("/submissions/export")
+async def export_submissions(
+    body: ExportRequest,
+    service: SubmissionService = Depends(get_submission_service),
 ) -> Response:
-    """Export a single submission's composed rubric as an .xlsx workbook."""
-    content = service.compose_rubric(filename).to_excel(filename)
+    """Export the selected submissions into one .xlsx workbook, a worksheet per
+    submission. The Threshold/Notes columns are included per the request flags."""
+    content = service.export_submissions(
+        body.filenames,
+        include_thresholds=body.include_thresholds,
+        include_notes=body.include_notes,
+    )
+
+    # A single submission gets a file named after it; multiple share one workbook.
+    if len(body.filenames) == 1:
+        download_name = body.filenames[0].replace(".bpmn", ".xlsx")
+    else:
+        download_name = "submissions.xlsx"
+
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename.replace('.bpmn', '.xlsx')}"
-        },
-    )
-
-
-@router.get("/submissions/export/all")
-async def export_all_submission(
-    service: SubmissionService = Depends(get_submission_service),
-) -> Response:
-    """Export every submission into one workbook, a worksheet per submission."""
-    workbook = Workbook()
-    for submission in service.list_submissions():
-        service.compose_rubric(submission["filename"]).to_excel_worksheet(
-            workbook, submission["name"]
-        )
-
-    # Drop openpyxl's empty default sheet — but only once we've added our own,
-    # since a workbook must keep at least one sheet (e.g. when there are no
-    # submissions, the default sheet is all that's left).
-    if len(workbook.sheetnames) > 1 and "Sheet" in workbook.sheetnames:
-        workbook.remove(workbook["Sheet"])
-
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return Response(
-        content=buffer.getvalue(),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=submissions.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename={download_name}"},
     )
 
 

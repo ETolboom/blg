@@ -2,6 +2,7 @@ import io
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from pydantic import BaseModel
 
 from checks import CheckComplexity, CheckDetail, CheckFormInput, CheckResult
@@ -87,8 +88,16 @@ class Rubric(BaseModel):
         """Serialize the rubric to JSON, excluding the reference XML."""
         return self.model_dump_json(exclude={"assignment": {"reference_xml"}})
 
-    def to_excel_worksheet(self, workbook: Workbook, filename: str) -> None:
-        """Write rubric criteria and scores as a formatted worksheet in the given workbook."""
+    def to_excel_worksheet(
+        self,
+        workbook: Workbook,
+        filename: str,
+        include_threshold: bool = True,
+        include_notes: bool = True,
+    ) -> None:
+        """Write rubric criteria and scores as a formatted worksheet in the given
+        workbook. ``include_threshold``/``include_notes`` toggle the optional
+        Threshold/Notes columns (e.g. to omit internal-only notes)."""
         worksheet = workbook.create_sheet(filename)
 
         # Define styles
@@ -108,15 +117,6 @@ class Rubric(BaseModel):
         )
         wrap_alignment = Alignment(wrap_text=True, vertical="top")
         center_alignment = Alignment(horizontal="center", vertical="center")
-
-        # Add headers
-        headers = ["Criterion", "Description", "Points", "Threshold", "Notes"]
-        for col, header in enumerate(headers, 1):
-            cell = worksheet.cell(row=1, column=col, value=header)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.border = border
-            cell.alignment = center_alignment
 
         def calculate_points(criterion):
             if not criterion.fulfilled:
@@ -150,47 +150,73 @@ class Rubric(BaseModel):
             ]
             return "\n".join(line for line in lines if line)
 
+        # Build the column layout, dropping optional columns when toggled off so
+        # the indices/widths shift to keep the sheet gap-free.
+        columns: list[tuple[str, int, bool]] = [
+            ("Criterion", 25, False),
+            ("Description", 45, False),
+            ("Points", 10, True),
+        ]
+        if include_threshold:
+            columns.append(("Threshold", 22, False))
+        if include_notes:
+            columns.append(("Notes", 40, False))
+
+        # Add headers
+        for col, (header, _width, _centered) in enumerate(columns, 1):
+            cell = worksheet.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+            cell.alignment = center_alignment
+
+        def cell_value(criterion, header: str):
+            if header == "Criterion":
+                return criterion.name
+            if header == "Description":
+                return criterion.description
+            if header == "Points":
+                return calculate_points(criterion)
+            if header == "Threshold":
+                return threshold_cell(criterion)
+            if header == "Notes":
+                return criterion.notes or ""
+            return ""
+
         # Add criteria data
         current_row = 2
         for criterion in self.criteria:
-            points = calculate_points(criterion)
-
-            worksheet.cell(row=current_row, column=1, value=criterion.name)
-            worksheet.cell(row=current_row, column=2, value=criterion.description)
-            worksheet.cell(row=current_row, column=3, value=points)
-            worksheet.cell(row=current_row, column=4, value=threshold_cell(criterion))
-            worksheet.cell(row=current_row, column=5, value=criterion.notes or "")
-
-            # Apply styling
-            for col in range(1, 6):
-                cell = worksheet.cell(row=current_row, column=col)
+            for col, (header, _width, centered) in enumerate(columns, 1):
+                cell = worksheet.cell(
+                    row=current_row, column=col, value=cell_value(criterion, header)
+                )
                 cell.border = border
                 cell.font = criterion_font
                 cell.fill = criterion_fill
-                cell.alignment = wrap_alignment
-                if col == 3:  # Points column
-                    cell.alignment = center_alignment
+                cell.alignment = center_alignment if centered else wrap_alignment
 
             current_row += 1
 
         # Set column widths
-        column_widths = {
-            "A": 25,  # Criterion
-            "B": 45,  # Description
-            "C": 10,  # Points
-            "D": 22,  # Threshold
-            "E": 40,  # Notes
-        }
+        for col, (_header, width, _centered) in enumerate(columns, 1):
+            worksheet.column_dimensions[get_column_letter(col)].width = width
 
-        for col_letter, width in column_widths.items():
-            worksheet.column_dimensions[col_letter].width = width
-
-    def to_excel(self, filename: str) -> bytes:
+    def to_excel(
+        self,
+        filename: str,
+        include_threshold: bool = True,
+        include_notes: bool = True,
+    ) -> bytes:
         """Export the rubric to an Excel workbook and return its raw bytes."""
         excel_buffer = io.BytesIO()
         workbook = Workbook()
 
-        self.to_excel_worksheet(workbook, filename)
+        self.to_excel_worksheet(
+            workbook,
+            filename,
+            include_threshold=include_threshold,
+            include_notes=include_notes,
+        )
 
         # Remove default sheet if it exists
         if "Sheet" in workbook.sheetnames:

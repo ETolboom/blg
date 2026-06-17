@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import {ArrowLeft, ArrowRight, PlusIcon, FileSpreadsheet, Folder} from "lucide-vue-next";
+import {ArrowLeft, ArrowRight, PlusIcon, FileDown} from "lucide-vue-next";
 import {Dialog, FileUpload, Select, useToast} from "primevue";
 import type {FileUploadUploaderEvent} from "primevue/fileupload";
 import {onMounted, ref, watch} from "vue";
@@ -7,6 +7,7 @@ import {submissionService, toastError} from "@/services";
 import type BpmnModeler from "bpmn-js/lib/Modeler";
 import type Submission from "@/features/grading/types/submission";
 import GradingButton from "@/features/grading/components/GradingButton.vue";
+import ExportDialog from "@/features/grading/components/ExportDialog.vue";
 
 const props = defineProps<{
   modeler: BpmnModeler;
@@ -21,6 +22,7 @@ const emit = defineEmits<{
 const toast = useToast();
 
 const uploadDialogVisible = ref<boolean>(false);
+const exportDialogVisible = ref<boolean>(false);
 const uploading = ref<boolean>(false);
 const submissions = ref<Submission[]>([]);
 const selectedSubmission = ref<Submission | null>(null);
@@ -154,12 +156,12 @@ const handleUpload = async (event: FileUploadUploaderEvent) => {
     </div>
     
     <div class="flex flex-row gap-x-2 items-center">
-      <GradingButton v-tooltip.bottom="'Export current submission'" :disabled="!selectedSubmission" :href="selectedSubmission ? `./api/submissions/export?filename=${selectedSubmission.filename}` : '#'" as="a"
-                :icon="FileSpreadsheet" rel="noopener" target="_blank"/>
-      <GradingButton v-tooltip.left="'Export all submissions'" as="a" href="./api/submissions/export/all" 
-                :icon="Folder" rel="noopener" target="_blank"/>
+      <GradingButton v-tooltip.left="'Export submissions'" :icon="FileDown" @click="exportDialogVisible = true"/>
     </div>
   </header>
+
+  <ExportDialog v-model:visible="exportDialogVisible" :submissions="submissions"
+                :current-submission="selectedSubmission"/>
 
   <Dialog v-model:visible="uploadDialogVisible" :style="{ width: '35rem' }" header="Upload Submissions" modal>
     <p class="mb-4 text-sm text-gray-600">Select one or more <strong>.bpmn</strong> files to upload as submissions.</p>
