@@ -31,7 +31,10 @@ class SubmissionCriterionResult(BaseModel):
     detail: CheckDetail | None = None
     threshold_override: float | None = None
     ideal_threshold_override: float | None = None
-    notes: str | None = None
+    # Grader annotations split by audience: internal notes stay between graders,
+    # feedback notes are intended for the student.
+    internal_notes: str | None = None
+    feedback_notes: str | None = None
 
 
 class SubmissionResult(BaseModel):
@@ -50,7 +53,8 @@ class RubricCriterion(CheckResult):
     project_ideal_threshold: float | None = None
     threshold_override: float | None = None
     ideal_threshold_override: float | None = None
-    notes: str | None = None
+    internal_notes: str | None = None
+    feedback_notes: str | None = None
     threshold_label: str | None = None
     ideal_threshold_label: str | None = None
     threshold_hint: str | None = None
@@ -97,11 +101,13 @@ class Rubric(BaseModel):
         workbook: Workbook,
         filename: str,
         include_threshold: bool = True,
-        include_notes: bool = True,
+        include_internal_notes: bool = True,
+        include_feedback_notes: bool = True,
     ) -> None:
         """Write rubric criteria and scores as a formatted worksheet in the given
-        workbook. ``include_threshold``/``include_notes`` toggle the optional
-        Threshold/Notes columns (e.g. to omit internal-only notes)."""
+        workbook. ``include_threshold`` toggles the optional Threshold column;
+        ``include_internal_notes``/``include_feedback_notes`` each toggle their own
+        notes column (e.g. omit internal notes for a student-facing export)."""
         worksheet = workbook.create_sheet(filename)
 
         # Define styles
@@ -171,8 +177,10 @@ class Rubric(BaseModel):
         ]
         if include_threshold:
             columns.append(("Threshold", 22, False))
-        if include_notes:
-            columns.append(("Notes", 40, False))
+        if include_internal_notes:
+            columns.append(("Internal notes", 40, False))
+        if include_feedback_notes:
+            columns.append(("Feedback notes", 40, False))
 
         # Add headers
         for col, (header, _width, _centered) in enumerate(columns, 1):
@@ -191,8 +199,10 @@ class Rubric(BaseModel):
                 return calculate_points(criterion)
             if header == "Threshold":
                 return threshold_cell(criterion)
-            if header == "Notes":
-                return criterion.notes or ""
+            if header == "Internal notes":
+                return criterion.internal_notes or ""
+            if header == "Feedback notes":
+                return criterion.feedback_notes or ""
             return ""
 
         # Add criteria data
@@ -217,7 +227,8 @@ class Rubric(BaseModel):
         self,
         filename: str,
         include_threshold: bool = True,
-        include_notes: bool = True,
+        include_internal_notes: bool = True,
+        include_feedback_notes: bool = True,
     ) -> bytes:
         """Export the rubric to an Excel workbook and return its raw bytes."""
         excel_buffer = io.BytesIO()
@@ -227,7 +238,8 @@ class Rubric(BaseModel):
             workbook,
             filename,
             include_threshold=include_threshold,
-            include_notes=include_notes,
+            include_internal_notes=include_internal_notes,
+            include_feedback_notes=include_feedback_notes,
         )
 
         # Remove default sheet if it exists

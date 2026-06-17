@@ -60,7 +60,8 @@ export const submissionService = {
     async exportSubmissions(
         filenames: string[],
         includeThresholds: boolean,
-        includeNotes: boolean
+        includeInternalNotes: boolean,
+        includeFeedbackNotes: boolean
     ): Promise<void> {
         const response = await fetch('/api/submissions/export', {
             method: 'POST',
@@ -68,7 +69,8 @@ export const submissionService = {
             body: JSON.stringify({
                 filenames,
                 include_thresholds: includeThresholds,
-                include_notes: includeNotes,
+                include_internal_notes: includeInternalNotes,
+                include_feedback_notes: includeFeedbackNotes,
             }),
         });
 

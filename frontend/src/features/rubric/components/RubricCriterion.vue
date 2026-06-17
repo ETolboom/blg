@@ -127,7 +127,9 @@ const thresholdHint = computed(() => props.criterion?.threshold_hint ?? null);
 const hasThresholdOverride = computed(
     () => currentOverride.value !== null || currentIdealOverride.value !== null,
 );
-const hasNotes = computed(() => !!props.criterion?.notes);
+const hasNotes = computed(
+    () => !!props.criterion?.internal_notes || !!props.criterion?.feedback_notes,
+);
 
 const settingsPopover = ref();
 const minDraft = ref<number | null>(null);
@@ -137,7 +139,8 @@ const toggleSettings = (event: Event) => {
   // Seed drafts from the active tier each time the pop-up opens.
   minDraft.value = currentOverride.value ?? baselineDefault.value;
   idealDraft.value = currentIdealOverride.value ?? baselineIdealDefault.value;
-  notesDraft.value = props.criterion?.notes ?? '';
+  internalDraft.value = props.criterion?.internal_notes ?? '';
+  feedbackDraft.value = props.criterion?.feedback_notes ?? '';
   settingsPopover.value?.toggle(event);
 };
 
@@ -170,13 +173,19 @@ const thresholdChanged = computed(() => {
       && idealDraft.value !== (currentIdealOverride.value ?? baselineIdealDefault.value);
 });
 
-// Grading note draft. Seeded when the pop-up opens (toggleSettings) and re-synced
-// when the criterion changes (e.g. switching submissions).
-const notesDraft = ref<string>(props.criterion?.notes ?? '');
-watch(() => props.criterion?.notes, (n) => (notesDraft.value = n ?? ''));
+// Grading note drafts (internal = between graders, feedback = for the student).
+// Seeded when the pop-up opens (toggleSettings) and re-synced when the criterion
+// changes (e.g. switching submissions).
+const internalDraft = ref<string>(props.criterion?.internal_notes ?? '');
+const feedbackDraft = ref<string>(props.criterion?.feedback_notes ?? '');
+watch(() => props.criterion?.internal_notes, (n) => (internalDraft.value = n ?? ''));
+watch(() => props.criterion?.feedback_notes, (n) => (feedbackDraft.value = n ?? ''));
 const notesChanged = computed(
-    // Notes are submission-scoped; the Reference tab has no note field.
-    () => !isReferenceMode.value && notesDraft.value.trim() !== (props.criterion?.notes ?? ''),
+    // Notes are submission-scoped; the Reference tab has no note fields.
+    () => !isReferenceMode.value && (
+        internalDraft.value.trim() !== (props.criterion?.internal_notes ?? '')
+        || feedbackDraft.value.trim() !== (props.criterion?.feedback_notes ?? '')
+    ),
 );
 
 const canApply = computed(
@@ -199,8 +208,9 @@ function applySettings() {
     emit(thresholdEvent.value, minDraft.value, ideal);
   }
   if (notesChanged.value) {
-    const next = notesDraft.value.trim();
-    emit('updateNotes', next === '' ? null : next);
+    const internal = internalDraft.value.trim();
+    const feedback = feedbackDraft.value.trim();
+    emit('updateNotes', internal === '' ? null : internal, feedback === '' ? null : feedback);
   }
   settingsPopover.value?.hide();
 }
@@ -288,10 +298,21 @@ function finishEdit() {
       <div class="flex flex-col flex-1 mr-8">
         <p class="text-gray-600 text-sm flex-1">{{ description }}</p>
       </div>
-      <div v-if="gradingSubmission && !isGroup && criterion?.notes"
+      <div v-if="gradingSubmission && !isGroup && criterion?.internal_notes"
            class="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-sm px-2 py-1">
         <StickyNote :size="14" class="mt-0.5 shrink-0 text-amber-500"/>
-        <p class="min-w-0 flex-1 text-sm text-gray-700 whitespace-pre-wrap wrap-break-word">{{ criterion.notes }}</p>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-semibold text-amber-700">Internal note</p>
+          <p class="text-sm text-gray-700 whitespace-pre-wrap wrap-break-word">{{ criterion.internal_notes }}</p>
+        </div>
+      </div>
+      <div v-if="gradingSubmission && !isGroup && criterion?.feedback_notes"
+           class="mt-2 flex items-start gap-1.5 bg-sky-50 border border-sky-200 rounded-sm px-2 py-1">
+        <StickyNote :size="14" class="mt-0.5 shrink-0 text-sky-500"/>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-semibold text-sky-700">Feedback for student</p>
+          <p class="text-sm text-gray-700 whitespace-pre-wrap wrap-break-word">{{ criterion.feedback_notes }}</p>
+        </div>
       </div>
       <div class="flex items-center pr-2 absolute right-0">
         <button v-if="hasDetail" class="p-2 hover:bg-gray-100 rounded-md transition-colors"
@@ -301,7 +322,7 @@ function finishEdit() {
         </button>
         <button v-if="!isGroup && (gradingSubmission || (gradingReference && supportsThreshold))"
                 class="relative p-2 hover:bg-gray-100 rounded-md transition-colors"
-                :title="gradingReference ? 'Assignment matching threshold' : (supportsThreshold ? 'Submission matching threshold' : 'Grading note')"
+                :title="gradingReference ? 'Assignment matching threshold' : (supportsThreshold ? 'Submission matching threshold' : 'Grading notes')"
                 @click.stop="toggleSettings">
           <Settings v-if="supportsThreshold" :size="20" :class="hasThresholdOverride ? 'text-blue-500' : 'text-gray-500'"/>
           <StickyNote v-else :size="20" :class="hasNotes ? 'text-blue-500' : 'text-gray-500'"/>
@@ -397,14 +418,25 @@ function finishEdit() {
           </template>
 
           <div v-if="!gradingReference" :class="supportsThreshold ? 'mt-4 pt-3 border-t border-gray-200' : ''">
-            <p class="font-semibold text-gray-800 mb-1">Grading note</p>
+            <p class="font-semibold text-gray-800 mb-1">Internal note</p>
             <p class="text-xs text-gray-500 mb-2">
-              Saved with the submission. Does not re-grade.
+              Only seen by graders. Saved with the submission; does not re-grade.
             </p>
             <textarea
-                v-model="notesDraft"
+                v-model="internalDraft"
                 class="w-full text-sm text-gray-700 bg-white border border-gray-300 rounded-md px-2 py-1 outline-none focus:border-blue-500 resize-y min-h-16"
-                placeholder="Add a grading note…"
+                placeholder="Add an internal note…"
+                rows="3"
+                @click.stop
+            />
+            <p class="font-semibold text-gray-800 mb-1 mt-3">Feedback for student</p>
+            <p class="text-xs text-gray-500 mb-2">
+              Intended for the student. Saved with the submission; does not re-grade.
+            </p>
+            <textarea
+                v-model="feedbackDraft"
+                class="w-full text-sm text-gray-700 bg-white border border-gray-300 rounded-md px-2 py-1 outline-none focus:border-blue-500 resize-y min-h-16"
+                placeholder="Add feedback for the student…"
                 rows="3"
                 @click.stop
             />

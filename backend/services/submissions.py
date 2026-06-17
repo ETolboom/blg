@@ -130,7 +130,7 @@ class SubmissionService:
                     group_result=sr.group_result if sr else None,
                     detail=sr.detail if sr else None,
                     # Threshold support/defaults/labels derived above; the
-                    # overrides and note are per-submission deviations from the
+                    # overrides and notes are per-submission deviations from the
                     # evaluation.
                     supports_threshold=meta.supports,
                     default_threshold=meta.default_threshold,
@@ -144,7 +144,8 @@ class SubmissionService:
                     ideal_threshold_override=(
                         sr.ideal_threshold_override if sr else None
                     ),
-                    notes=sr.notes if sr else None,
+                    internal_notes=sr.internal_notes if sr else None,
+                    feedback_notes=sr.feedback_notes if sr else None,
                 )
             )
 
@@ -216,13 +217,14 @@ class SubmissionService:
         self, filename: str, result: SubmissionCriterionResult
     ) -> None:
         """Overlay a single freshly-evaluated criterion onto the stored eval,
-        preserving the grader's existing note for that criterion (a re-grade
-        recomputes scoring, not the manual annotation)."""
+        preserving the grader's existing notes for that criterion (a re-grade
+        recomputes scoring, not the manual annotations)."""
         existing = self._read_eval(filename) or SubmissionResult()
         by_id = {cr.id: cr for cr in existing.criteria}
         prev = by_id.get(result.id)
         if prev is not None:
-            result.notes = prev.notes
+            result.internal_notes = prev.internal_notes
+            result.feedback_notes = prev.feedback_notes
         by_id[result.id] = result
         existing.criteria = list(by_id.values())
         self.write_eval(filename, existing)
@@ -236,7 +238,8 @@ class SubmissionService:
         Submissions carrying their own override for the criterion are left
         untouched (a submission override wins over the project level); the grader
         note is preserved via ``apply_criterion_result``. A criterion counts as
-        overridden when either its min or ideal override is set.
+        overridden when either its min or ideal override is set; both notes are
+        preserved via ``apply_criterion_result``.
         """
         # Imported here to avoid a module-level import cycle with the router layer
         # that wires evaluation and this service together.
@@ -265,11 +268,13 @@ class SubmissionService:
         self,
         filenames: list[str],
         include_thresholds: bool = True,
-        include_notes: bool = True,
+        include_internal_notes: bool = True,
+        include_feedback_notes: bool = True,
     ) -> bytes:
         """Export the graded rubrics for the given submissions into one workbook,
-        a worksheet per submission. ``include_thresholds``/``include_notes``
-        toggle the optional Threshold/Notes columns."""
+        a worksheet per submission. ``include_thresholds`` toggles the Threshold
+        column; ``include_internal_notes``/``include_feedback_notes`` each toggle
+        their own notes column."""
         if not filenames:
             raise HTTPException(
                 status_code=400, detail="No submissions selected for export"
@@ -281,7 +286,8 @@ class SubmissionService:
                 workbook,
                 filename.removesuffix(".bpmn"),
                 include_threshold=include_thresholds,
-                include_notes=include_notes,
+                include_internal_notes=include_internal_notes,
+                include_feedback_notes=include_feedback_notes,
             )
 
         # Drop openpyxl's empty default sheet — but only once we've added our own,

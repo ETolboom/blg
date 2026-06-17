@@ -31,7 +31,7 @@ const emit = defineEmits<{
   updatePoints: [index: number, points: Number];
   updateThreshold: [index: number, threshold: number | null, idealThreshold: number | null];
   updateProjectThreshold: [index: number, threshold: number | null, idealThreshold: number | null];
-  updateNotes: [index: number, notes: string | null];
+  updateNotes: [index: number, internalNotes: string | null, feedbackNotes: string | null];
   openAddDialog: [category: CheckComplexity];
   openBehavioralAddDialog: [];
   openAddGroupDialog: [];
@@ -165,7 +165,7 @@ const toggleSidebar = () => {
                         @updatePoints="(points: Number) => emit('updatePoints', criteria.indexOf(item), points)"
                         @updateThreshold="(t: number | null, i: number | null) => emit('updateThreshold', criteria.indexOf(item), t, i)"
                         @updateProjectThreshold="(t: number | null, i: number | null) => emit('updateProjectThreshold', criteria.indexOf(item), t, i)"
-                        @updateNotes="(n: string | null) => emit('updateNotes', criteria.indexOf(item), n)"
+                        @updateNotes="(internal: string | null, feedback: string | null) => emit('updateNotes', criteria.indexOf(item), internal, feedback)"
                         @delete="emit('deleteCriterion', item.id || '')"
                       />
                     </template>

@@ -27,7 +27,8 @@ async def get_submissions_list(
 class ExportRequest(BaseModel):
     filenames: list[str]
     include_thresholds: bool = True
-    include_notes: bool = True
+    include_internal_notes: bool = True
+    include_feedback_notes: bool = True
 
 
 @router.post("/submissions/export")
@@ -36,11 +37,12 @@ async def export_submissions(
     service: SubmissionService = Depends(get_submission_service),
 ) -> Response:
     """Export the selected submissions into one .xlsx workbook, a worksheet per
-    submission. The Threshold/Notes columns are included per the request flags."""
+    submission. The Threshold/notes columns are included per the request flags."""
     content = service.export_submissions(
         body.filenames,
         include_thresholds=body.include_thresholds,
-        include_notes=body.include_notes,
+        include_internal_notes=body.include_internal_notes,
+        include_feedback_notes=body.include_feedback_notes,
     )
 
     # A single submission gets a file named after it; multiple share one workbook.

@@ -210,11 +210,16 @@ const updateProjectThreshold = async (
   }
 };
 
-const updateNotes = (index: number, notes: string | null): void => {
+const updateNotes = (
+    index: number,
+    internalNotes: string | null,
+    feedbackNotes: string | null,
+): void => {
   const criterion = props.criteria[index];
   if (!criterion) return;
 
-  criterion.notes = notes;
+  criterion.internal_notes = internalNotes;
+  criterion.feedback_notes = feedbackNotes;
   emit('saveSubmission', props.criteria);
 };
 

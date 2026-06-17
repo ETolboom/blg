@@ -18,7 +18,8 @@ type Scope = "current" | "all" | "custom";
 const scope = ref<Scope>("current");
 const selected = ref<string[]>([]);
 const includeThresholds = ref(true);
-const includeNotes = ref(true);
+const includeInternalNotes = ref(true);
+const includeFeedbackNotes = ref(true);
 const exporting = ref(false);
 
 const analyzedSubmissions = computed(() => props.submissions.filter((s) => s.analyzed));
@@ -38,7 +39,8 @@ watch(visible, (isVisible) => {
   scope.value = currentAnalyzed.value ? "current" : "all";
   selected.value = [];
   includeThresholds.value = true;
-  includeNotes.value = true;
+  includeInternalNotes.value = true;
+  includeFeedbackNotes.value = true;
 });
 
 const resolvedFilenames = computed<string[]>(() => {
@@ -62,7 +64,8 @@ const exportNow = async () => {
     await submissionService.exportSubmissions(
         resolvedFilenames.value,
         includeThresholds.value,
-        includeNotes.value
+        includeInternalNotes.value,
+        includeFeedbackNotes.value
     );
     visible.value = false;
   } catch (error) {
@@ -145,8 +148,12 @@ const exportNow = async () => {
           <span>Custom thresholds</span>
         </label>
         <label class="flex items-center gap-x-2">
-          <Checkbox v-model="includeNotes" binary/>
-          <span>Notes</span>
+          <Checkbox v-model="includeInternalNotes" binary/>
+          <span>Internal notes</span>
+        </label>
+        <label class="flex items-center gap-x-2">
+          <Checkbox v-model="includeFeedbackNotes" binary/>
+          <span>Feedback notes</span>
         </label>
       </div>
     </div>
