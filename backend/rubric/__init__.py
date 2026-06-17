@@ -46,6 +46,8 @@ class RubricCriterion(CheckResult):
     supports_threshold: bool = False
     default_threshold: float | None = None
     default_ideal_threshold: float | None = None
+    project_threshold: float | None = None
+    project_ideal_threshold: float | None = None
     threshold_override: float | None = None
     ideal_threshold_override: float | None = None
     notes: str | None = None
@@ -64,6 +66,8 @@ class CriterionDefinition(BaseModel):
     supports_threshold: bool = False
     default_threshold: float | None = None
     default_ideal_threshold: float | None = None
+    project_threshold: float | None = None
+    project_ideal_threshold: float | None = None
 
 
 class RubricDefinition(BaseModel):
@@ -136,17 +140,25 @@ class Rubric(BaseModel):
 
         def threshold_cell(criterion) -> str:
             """Make deviations traceable: list only the cut-offs (min and/or
-            ideal) the grader overrode away from the default; criteria graded at
-            the default thresholds leave this column blank."""
+            ideal) the grader overrode away from the effective default; criteria
+            graded at the effective thresholds leave this column blank. The
+            effective default is the project threshold when set, otherwise the
+            global default."""
             if not criterion.supports_threshold:
                 return ""
+            eff_min = (
+                criterion.project_threshold
+                if criterion.project_threshold is not None
+                else criterion.default_threshold
+            )
+            eff_ideal = (
+                criterion.project_ideal_threshold
+                if criterion.project_ideal_threshold is not None
+                else criterion.default_ideal_threshold
+            )
             lines = [
-                _line("min", criterion.threshold_override, criterion.default_threshold),
-                _line(
-                    "ideal",
-                    criterion.ideal_threshold_override,
-                    criterion.default_ideal_threshold,
-                ),
+                _line("min", criterion.threshold_override, eff_min),
+                _line("ideal", criterion.ideal_threshold_override, eff_ideal),
             ]
             return "\n".join(line for line in lines if line)
 

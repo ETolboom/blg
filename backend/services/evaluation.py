@@ -67,13 +67,28 @@ def evaluate_criterion(
     are optional per-submission overrides for a standard check's matching
     cut-offs; they are recorded on the result so the deviation is reproducible
     and exportable.
+
+    Threshold precedence is submission -> project -> global: a submission
+    override (the ``threshold`` arg) wins; absent that the criterion's
+    project-level threshold applies; absent that the check falls back to its
+    class default inside ``analyze``. Only the submission-level deviation is
+    recorded on the result, so the per-model file stays a pure submission
+    override.
     """
     if crit.check_complexity != CheckComplexity.COMPLEX:
         # Standard, model-agnostic / configurable check
+        effective_threshold = (
+            threshold if threshold is not None else crit.project_threshold
+        )
+        effective_ideal = (
+            ideal_threshold
+            if ideal_threshold is not None
+            else crit.project_ideal_threshold
+        )
         result = manager.get_check(crit.id).analyze(
             inputs=crit.inputs,
-            threshold=threshold,
-            ideal_threshold=ideal_threshold,
+            threshold=effective_threshold,
+            ideal_threshold=effective_ideal,
         )
         return SubmissionCriterionResult(
             id=result.id,

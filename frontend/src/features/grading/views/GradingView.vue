@@ -345,6 +345,7 @@ const onOnboarded = async () => {
                     :modeler="modeler!"
                     :is-editable="activeTab !== TAB.SUBMISSION"
                     :submission-name="activeTab === TAB.SUBMISSION ? submission_name : undefined"
+                    :grading-reference="activeTab === TAB.REFERENCE"
                     @saveSubmission="saveSubmission"
                     @updateRubric="updateRubric"/>
     </div>

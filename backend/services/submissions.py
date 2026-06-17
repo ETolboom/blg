@@ -135,6 +135,8 @@ class SubmissionService:
                     supports_threshold=meta.supports,
                     default_threshold=meta.default_threshold,
                     default_ideal_threshold=meta.default_ideal_threshold,
+                    project_threshold=ref.project_threshold,
+                    project_ideal_threshold=ref.project_ideal_threshold,
                     threshold_label=meta.threshold_label,
                     ideal_threshold_label=meta.ideal_threshold_label,
                     threshold_hint=meta.threshold_hint,
@@ -224,6 +226,40 @@ class SubmissionService:
         by_id[result.id] = result
         existing.criteria = list(by_id.values())
         self.write_eval(filename, existing)
+
+    def regrade_inheriting_submissions(
+        self, crit, registry, rule_manager
+    ) -> None:
+        """Re-grade ``crit`` for every analyzed submission that inherits its
+        threshold, picking up a freshly-changed project threshold.
+
+        Submissions carrying their own override for the criterion are left
+        untouched (a submission override wins over the project level); the grader
+        note is preserved via ``apply_criterion_result``. A criterion counts as
+        overridden when either its min or ideal override is set.
+        """
+        # Imported here to avoid a module-level import cycle with the router layer
+        # that wires evaluation and this service together.
+        from services.evaluation import evaluate_criterion
+
+        for entry in self.list_submissions():
+            if not entry["analyzed"]:
+                continue
+            filename = entry["filename"]
+            existing = self._read_eval(filename)
+            if existing is None:
+                continue
+            sr = next((c for c in existing.criteria if c.id == crit.id), None)
+            if sr is not None and (
+                sr.threshold_override is not None
+                or sr.ideal_threshold_override is not None
+            ):
+                continue
+
+            model_xml = self.get_submission_xml(filename)
+            manager = registry.create_manager(model_xml)
+            result = evaluate_criterion(crit, manager, model_xml, rule_manager)
+            self.apply_criterion_result(filename, result)
 
     def export_submissions(
         self,

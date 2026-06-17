@@ -17,8 +17,11 @@ const props = withDefaults(defineProps<{
   currentHighlightIndex: number;
   isEditable?: boolean;
   submissionFilename?: string;
+  // True on the Reference tab: the criterion gear edits project-level thresholds.
+  gradingReference?: boolean;
 }>(), {
-  isEditable: true
+  isEditable: true,
+  gradingReference: false,
 });
 
 const emit = defineEmits<{
@@ -27,6 +30,7 @@ const emit = defineEmits<{
   resetCustomScore: [index: number];
   updatePoints: [index: number, points: Number];
   updateThreshold: [index: number, threshold: number | null, idealThreshold: number | null];
+  updateProjectThreshold: [index: number, threshold: number | null, idealThreshold: number | null];
   updateNotes: [index: number, notes: string | null];
   openAddDialog: [category: CheckComplexity];
   openBehavioralAddDialog: [];
@@ -153,12 +157,14 @@ const toggleSidebar = () => {
                         :criterion="item"
                         :is-editable="isEditable"
                         :grading-submission="!!submissionFilename"
+                        :grading-reference="gradingReference"
                         @click="emit('toggleHighlight', criteria.indexOf(item), item['problematic_elements'])"
                         @edit="emit('editCriterion', item)"
                         @reset="emit('resetCustomScore', criteria.indexOf(item))"
                         @toggle="emit('toggleState', criteria.indexOf(item))"
                         @updatePoints="(points: Number) => emit('updatePoints', criteria.indexOf(item), points)"
                         @updateThreshold="(t: number | null, i: number | null) => emit('updateThreshold', criteria.indexOf(item), t, i)"
+                        @updateProjectThreshold="(t: number | null, i: number | null) => emit('updateProjectThreshold', criteria.indexOf(item), t, i)"
                         @updateNotes="(n: string | null) => emit('updateNotes', criteria.indexOf(item), n)"
                         @delete="emit('deleteCriterion', item.id || '')"
                       />

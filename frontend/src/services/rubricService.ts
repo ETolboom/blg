@@ -50,6 +50,22 @@ export const rubricService = {
         );
     },
 
+    // Set the project-level threshold for a criterion (set from the Reference
+    // tab). null values reset the respective cut-off to the global default. The
+    // backend re-grades the reference + inheriting submissions and returns the
+    // composed reference rubric.
+    async updateCriterionProjectThreshold(
+        criterionId: string,
+        threshold: number | null,
+        idealThreshold: number | null
+    ): Promise<Rubric> {
+        return apiPut<Rubric>(
+            `/rubric/criteria/${encodeURIComponent(criterionId)}/project-threshold`,
+            JSON.stringify({ threshold, ideal_threshold: idealThreshold }),
+            'application/json'
+        );
+    },
+
     async uploadSupplement(file: File): Promise<{ message: string; filename: string }> {
         const formData = new FormData();
         formData.append('file', file);

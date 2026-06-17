@@ -19,6 +19,8 @@ const props = defineProps<{
   criteria: Criterion[];
   isEditable?: boolean;
   submissionName?: string;
+  // True on the Reference tab: the criterion gear edits project-level thresholds.
+  gradingReference?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -181,6 +183,30 @@ const updateThreshold = async (
     });
   } catch (error) {
     toastError(toast, 'Could not re-grade criterion', error);
+  }
+};
+
+const updateProjectThreshold = async (
+    index: number,
+    threshold: number | null,
+    idealThreshold: number | null,
+): Promise<void> => {
+  const criterion = props.criteria[index];
+  if (!criterion) return;
+
+  try {
+    const rubric = await rubricService.updateCriterionProjectThreshold(
+        criterion.id, threshold, idealThreshold
+    );
+    emit('updateRubric', rubric);
+    const reset = threshold === null && idealThreshold === null;
+    toastSuccess(toast, 'Assignment matching threshold updated', {
+      message: reset
+          ? 'Reset to the global default; reference and submissions re-graded'
+          : 'Reference and inheriting submissions re-graded',
+    });
+  } catch (error) {
+    toastError(toast, 'Could not update assignment matching threshold', error);
   }
 };
 
@@ -375,6 +401,7 @@ onMounted(() => {
       :total-score="totalScore"
       :is-editable="isEditable"
       :submission-filename="submissionName"
+      :grading-reference="gradingReference"
       @open-add-dialog="openAddDialog"
       @open-behavioral-add-dialog="openBehavioralAddDialog"
       @open-add-group-dialog="openGroupAddDialog"
@@ -383,6 +410,7 @@ onMounted(() => {
       @toggle-state="toggleState"
       @update-points="(index, score) => updatePoints(index, String(score))"
       @update-threshold="updateThreshold"
+      @update-project-threshold="updateProjectThreshold"
       @update-notes="updateNotes"
       @edit-criterion="handleEditCriterion"
       @delete-criterion="handleDeleteCriterion"

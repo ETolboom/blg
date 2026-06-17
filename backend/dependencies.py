@@ -129,9 +129,14 @@ def set_active_project(app, name: str) -> None:
         recompute_reference_eval(app)
 
 
-def save_rubric(request: Request, rubric: RubricDefinition) -> None:
-    """Persist the rubric *definition* to app state and disk, then invalidate
-    cached submission results and recompute the reference evaluation."""
+def save_rubric_definition_only(request: Request, rubric: RubricDefinition) -> None:
+    """Persist the rubric *definition* to app state and disk without wiping
+    cached submission results.
+
+    Use this for changes that don't alter the set of criteria (e.g. a
+    project-threshold tweak), where the caller takes responsibility for any
+    targeted re-grade. Structural changes should go through ``save_rubric``.
+    """
     service: SubmissionService = request.app.state.submission_service
     request.app.state.rubric = rubric
     service.rubric = rubric
@@ -139,5 +144,10 @@ def save_rubric(request: Request, rubric: RubricDefinition) -> None:
     with open(os.path.join(service.base_path, "rubric.json"), "w") as f:
         f.write(rubric.to_disk_json())
 
-    service.invalidate_all_results()
+
+def save_rubric(request: Request, rubric: RubricDefinition) -> None:
+    """Persist the rubric definition to app state and disk, then invalidate
+    cached submission results and recompute the reference evaluation."""
+    save_rubric_definition_only(request, rubric)
+    request.app.state.submission_service.invalidate_all_results()
     recompute_reference_eval(request.app)

@@ -20,6 +20,10 @@ export interface Criterion extends Check {
     supports_threshold?: boolean;
     default_threshold?: number | null;
     default_ideal_threshold?: number | null;
+    // Project-level overrides (the middle tier between the global default and the
+    // per-submission override). Set from the Reference tab; null = inherit global.
+    project_threshold?: number | null;
+    project_ideal_threshold?: number | null;
     threshold_override?: number | null;
     ideal_threshold_override?: number | null;
     notes?: string | null;

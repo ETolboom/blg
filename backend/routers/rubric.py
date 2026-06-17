@@ -17,7 +17,9 @@ from dependencies import (
     get_rubric,
     get_rule_manager,
     get_submission_service,
+    recompute_reference_eval,
     save_rubric,
+    save_rubric_definition_only,
 )
 from rubric import (
     CriterionDefinition,
@@ -429,3 +431,58 @@ async def _unmerge_and_delete_group(
         unmerged_rules=restored,
         warning=f"Some rules not found: {missing}" if missing else None,
     )
+
+
+class ProjectThresholdRequest(BaseModel):
+    # None resets the respective cut-off to the check's global class default.
+    threshold: float | None = None
+    ideal_threshold: float | None = None
+
+
+@router.put("/rubric/criteria/{criterion_id}/project-threshold")
+async def set_criterion_project_threshold(
+    criterion_id: str,
+    body: ProjectThresholdRequest,
+    request: Request,
+    rubric: RubricDefinition = Depends(get_rubric),
+    registry: CheckRegistry = Depends(get_check_registry),
+    rule_manager: BehavioralRuleManager = Depends(get_rule_manager),
+    service: SubmissionService = Depends(get_submission_service),
+) -> Rubric:
+    """Set the project-level threshold for a criterion (the middle tier between
+    the global default and per-submission overrides).
+
+    Persists the new threshold on the rubric definition, then re-grades the
+    reference and every submission that inherits the threshold; submissions with
+    their own override are left untouched. Returns the composed reference rubric
+    so the Reference tab reflects the change.
+    """
+    crit = next((c for c in rubric.criteria if c.id == criterion_id), None)
+    if crit is None:
+        raise HTTPException(
+            status_code=404, detail=f"Criterion '{criterion_id}' not found in rubric"
+        )
+    meta = registry.threshold_meta(criterion_id)
+    if not meta.supports:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Criterion '{criterion_id}' does not support a threshold override",
+        )
+
+    # Record a project override only when it differs from the global default, so
+    # a value left at the default reads as "no project override" downstream.
+    def _deviation(value: float | None, default: float | None) -> float | None:
+        return None if value is None or value == default else value
+
+    crit.project_threshold = _deviation(body.threshold, meta.default_threshold)
+    crit.project_ideal_threshold = _deviation(
+        body.ideal_threshold, meta.default_ideal_threshold
+    )
+
+    # Don't wipe submission evals (that would discard notes/overrides); persist
+    # the definition, refresh the reference, then targeted-regrade inheritors.
+    save_rubric_definition_only(request, rubric)
+    recompute_reference_eval(request.app)
+    service.regrade_inheriting_submissions(crit, registry, rule_manager)
+
+    return service.compose_rubric(REFERENCE_FILENAME)

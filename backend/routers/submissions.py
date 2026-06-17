@@ -112,13 +112,24 @@ async def regrade_criterion_threshold(
             detail=f"Criterion '{criterion_id}' does not support a threshold override",
         )
 
-    # Record an override only when it genuinely differs from the default, so a
-    # value left at its default reads as "no deviation" everywhere downstream.
+    # Record a submission override only when it differs from the *effective*
+    # default (the project threshold when set, otherwise the global default), so
+    # a value left at the inherited level reads as "no deviation" downstream.
     def _deviation(value: float | None, default: float | None) -> float | None:
         return None if value is None or value == default else value
 
-    threshold = _deviation(body.threshold, meta.default_threshold)
-    ideal_threshold = _deviation(body.ideal_threshold, meta.default_ideal_threshold)
+    eff_default = (
+        crit.project_threshold
+        if crit.project_threshold is not None
+        else meta.default_threshold
+    )
+    eff_ideal_default = (
+        crit.project_ideal_threshold
+        if crit.project_ideal_threshold is not None
+        else meta.default_ideal_threshold
+    )
+    threshold = _deviation(body.threshold, eff_default)
+    ideal_threshold = _deviation(body.ideal_threshold, eff_ideal_default)
 
     model_xml = service.get_submission_xml(filename)
     manager = registry.create_manager(model_xml)

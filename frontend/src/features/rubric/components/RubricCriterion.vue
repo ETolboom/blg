@@ -24,7 +24,7 @@ import {CheckComplexity} from "@/features/rubric/types/check_complexity.ts";
 import type {Criterion} from "@/features/rubric/types/rubric";
 import {isGroup as isGroupCriterion} from "@/features/behavior/types/group";
 
-const emit = defineEmits(['toggle', 'reset', 'updatePoints', 'edit', 'delete', 'updateThreshold', 'updateNotes']);
+const emit = defineEmits(['toggle', 'reset', 'updatePoints', 'edit', 'delete', 'updateThreshold', 'updateProjectThreshold', 'updateNotes']);
 
 const props = withDefaults(defineProps<{
   title?: string;
@@ -39,9 +39,14 @@ const props = withDefaults(defineProps<{
   // gear (threshold override + grading note). Hidden when editing the rubric
   // definition (reference tab).
   gradingSubmission?: boolean;
+  // True on the Reference tab: the gear edits the *project-level* threshold (the
+  // tier between the global default and per-submission overrides). No grading
+  // note here; notes are submission-scoped.
+  gradingReference?: boolean;
 }>(), {
   isEditable: true,
   gradingSubmission: false,
+  gradingReference: false,
 });
 
 // Canonical "is this a group" predicate: the `group:` id prefix (see group.ts),
@@ -89,14 +94,38 @@ const defaultIdealThreshold = computed(() => props.criterion?.default_ideal_thre
 const hasIdeal = computed(() => defaultIdealThreshold.value !== null);
 const thresholdOverride = computed(() => props.criterion?.threshold_override ?? null);
 const idealThresholdOverride = computed(() => props.criterion?.ideal_threshold_override ?? null);
+const projectThreshold = computed(() => props.criterion?.project_threshold ?? null);
+const projectIdealThreshold = computed(() => props.criterion?.project_ideal_threshold ?? null);
+// The gear edits one threshold tier depending on the mode, and shows the value
+// it deviates from as its "default". On the Reference tab it edits the *project*
+// threshold against the global default; while grading a submission it edits the
+// *submission* override against the effective default (project threshold if set,
+// otherwise the global default).
+const isReferenceMode = computed(() => props.gradingReference);
+const currentOverride = computed(() =>
+    isReferenceMode.value ? projectThreshold.value : thresholdOverride.value);
+const currentIdealOverride = computed(() =>
+    isReferenceMode.value ? projectIdealThreshold.value : idealThresholdOverride.value);
+const baselineDefault = computed(() =>
+    isReferenceMode.value ? defaultThreshold.value : (projectThreshold.value ?? defaultThreshold.value));
+const baselineIdealDefault = computed(() =>
+    isReferenceMode.value ? defaultIdealThreshold.value : (projectIdealThreshold.value ?? defaultIdealThreshold.value));
+// Label for the baseline shown next to each input. In submission mode the
+// baseline is the inherited value, which may be an assignment-level override
+// rather than the global default — spell that out so a grader knows where the
+// number comes from. Min and ideal can inherit independently.
+const minDefaultLabel = computed(() =>
+    (!isReferenceMode.value && projectThreshold.value !== null) ? 'assignment default' : 'default');
+const idealDefaultLabel = computed(() =>
+    (!isReferenceMode.value && projectIdealThreshold.value !== null) ? 'assignment default' : 'default');
 // Per-check labels/help so the gear reads correctly (a "minimum" can mean
 // opposite leniency directions across checks). Fall back to generic wording.
 const thresholdLabel = computed(() => props.criterion?.threshold_label ?? 'Minimum');
 const idealThresholdLabel = computed(() => props.criterion?.ideal_threshold_label ?? 'Ideal');
 const thresholdHint = computed(() => props.criterion?.threshold_hint ?? null);
-// Deviation badge on the gear: a non-default cut-off for this submission.
+// Deviation badge on the gear: a non-default cut-off at the active tier.
 const hasThresholdOverride = computed(
-    () => thresholdOverride.value !== null || idealThresholdOverride.value !== null,
+    () => currentOverride.value !== null || currentIdealOverride.value !== null,
 );
 const hasNotes = computed(() => !!props.criterion?.notes);
 
@@ -105,9 +134,9 @@ const minDraft = ref<number | null>(null);
 const idealDraft = ref<number | null>(null);
 
 const toggleSettings = (event: Event) => {
-  // Seed drafts from the current criterion each time the pop-up opens.
-  minDraft.value = thresholdOverride.value ?? defaultThreshold.value;
-  idealDraft.value = idealThresholdOverride.value ?? defaultIdealThreshold.value;
+  // Seed drafts from the active tier each time the pop-up opens.
+  minDraft.value = currentOverride.value ?? baselineDefault.value;
+  idealDraft.value = currentIdealOverride.value ?? baselineIdealDefault.value;
   notesDraft.value = props.criterion?.notes ?? '';
   settingsPopover.value?.toggle(event);
 };
@@ -136,9 +165,9 @@ const thresholdInputsValid = computed(
 // graded with — i.e. an Apply would trigger a re-grade.
 const thresholdChanged = computed(() => {
   if (!supportsThreshold.value) return false;
-  if (minDraft.value !== (thresholdOverride.value ?? defaultThreshold.value)) return true;
+  if (minDraft.value !== (currentOverride.value ?? baselineDefault.value)) return true;
   return hasIdeal.value
-      && idealDraft.value !== (idealThresholdOverride.value ?? defaultIdealThreshold.value);
+      && idealDraft.value !== (currentIdealOverride.value ?? baselineIdealDefault.value);
 });
 
 // Grading note draft. Seeded when the pop-up opens (toggleSettings) and re-synced
@@ -146,7 +175,8 @@ const thresholdChanged = computed(() => {
 const notesDraft = ref<string>(props.criterion?.notes ?? '');
 watch(() => props.criterion?.notes, (n) => (notesDraft.value = n ?? ''));
 const notesChanged = computed(
-    () => notesDraft.value.trim() !== (props.criterion?.notes ?? ''),
+    // Notes are submission-scoped; the Reference tab has no note field.
+    () => !isReferenceMode.value && notesDraft.value.trim() !== (props.criterion?.notes ?? ''),
 );
 
 const canApply = computed(
@@ -157,11 +187,16 @@ const canApply = computed(
 // re-grades the criterion server-side. The backend records a threshold override
 // only when a value differs from the check's default, so leaving a field at its
 // default is a no-op deviation.
+// On the Reference tab the gear edits the project threshold; while grading a
+// submission it edits the per-submission override.
+const thresholdEvent = computed(() =>
+    isReferenceMode.value ? 'updateProjectThreshold' : 'updateThreshold');
+
 function applySettings() {
   if (!canApply.value) return;
   if (thresholdChanged.value && _valid(minDraft.value)) {
     const ideal = hasIdeal.value && _valid(idealDraft.value) ? idealDraft.value : null;
-    emit('updateThreshold', minDraft.value, ideal);
+    emit(thresholdEvent.value, minDraft.value, ideal);
   }
   if (notesChanged.value) {
     const next = notesDraft.value.trim();
@@ -171,9 +206,9 @@ function applySettings() {
 }
 
 function resetThresholds() {
-  minDraft.value = defaultThreshold.value;
-  idealDraft.value = defaultIdealThreshold.value;
-  emit('updateThreshold', null, null);
+  minDraft.value = baselineDefault.value;
+  idealDraft.value = baselineIdealDefault.value;
+  emit(thresholdEvent.value, null, null);
   settingsPopover.value?.hide();
 }
 
@@ -264,9 +299,9 @@ function finishEdit() {
                 @click.stop="toggleDetail">
           <Info :size="20" class="text-gray-500"/>
         </button>
-        <button v-if="gradingSubmission && !isGroup"
+        <button v-if="!isGroup && (gradingSubmission || (gradingReference && supportsThreshold))"
                 class="relative p-2 hover:bg-gray-100 rounded-md transition-colors"
-                :title="supportsThreshold ? 'Settings' : 'Grading note'"
+                :title="gradingReference ? 'Assignment matching threshold' : (supportsThreshold ? 'Submission matching threshold' : 'Grading note')"
                 @click.stop="toggleSettings">
           <Settings v-if="supportsThreshold" :size="20" :class="hasThresholdOverride ? 'text-blue-500' : 'text-gray-500'"/>
           <StickyNote v-else :size="20" :class="hasNotes ? 'text-blue-500' : 'text-gray-500'"/>
@@ -315,15 +350,19 @@ function finishEdit() {
       <Popover ref="settingsPopover" @show="onPopoverShow(settingsPopover)" @hide="onPopoverHide(settingsPopover)">
         <div class="w-96 text-sm text-gray-700">
           <template v-if="supportsThreshold">
-            <p class="font-semibold text-gray-800 mb-1">Matching thresholds</p>
+            <p class="font-semibold text-gray-800 mb-1">
+              {{ gradingReference ? 'Assignment matching threshold' : 'Submission matching threshold' }}
+            </p>
             <p class="text-xs text-gray-500 mb-3">
-              {{ thresholdHint ?? 'Adjust how strict the match must be for this submission only, then apply to re-grade.' }}
+              {{ thresholdHint ?? (gradingReference
+                ? 'Set the assignment-wide strictness for this criterion, then apply to re-grade the reference and all inheriting submissions.'
+                : 'Adjust how strict the match must be for this submission only, then apply to re-grade.') }}
             </p>
 
             <div class="flex items-center justify-between gap-2 mb-2">
               <label class="text-gray-700">
                 {{ thresholdLabel }}
-                <span class="text-xs text-gray-400">(default {{ defaultThreshold }})</span>
+                <span class="text-xs text-gray-400">({{ minDefaultLabel }} {{ baselineDefault }})</span>
               </label>
               <input
                   v-model.number="minDraft"
@@ -339,7 +378,7 @@ function finishEdit() {
             <div v-if="hasIdeal" class="flex items-center justify-between gap-2 mb-1">
               <label class="text-gray-700">
                 {{ idealThresholdLabel }}
-                <span class="text-xs text-gray-400">(default {{ defaultIdealThreshold }})</span>
+                <span class="text-xs text-gray-400">({{ idealDefaultLabel }} {{ baselineIdealDefault }})</span>
               </label>
               <input
                   v-model.number="idealDraft"
@@ -357,7 +396,7 @@ function finishEdit() {
             </p>
           </template>
 
-          <div :class="supportsThreshold ? 'mt-4 pt-3 border-t border-gray-200' : ''">
+          <div v-if="!gradingReference" :class="supportsThreshold ? 'mt-4 pt-3 border-t border-gray-200' : ''">
             <p class="font-semibold text-gray-800 mb-1">Grading note</p>
             <p class="text-xs text-gray-500 mb-2">
               Saved with the submission. Does not re-grade.
