@@ -2,6 +2,7 @@
 import {onMounted, onUnmounted, ref, shallowRef, useTemplateRef, nextTick} from "vue";
 import {useRouter} from "vue-router";
 import {ProgressBar, useToast, Tabs, TabList, Tab, TabPanels, TabPanel} from "primevue";
+import {ArrowLeft} from "lucide-vue-next";
 import {createModeler} from "@/features/bpmn/modeler";
 import BpmnModeler from "bpmn-js/lib/Modeler";
 import {checkService, ApiError, projectService, rubricService, submissionService, toastError, toastSuccess, REFERENCE_FILENAME} from "@/services";
@@ -30,6 +31,7 @@ const submission_name = ref<string>();
 const reference_xml = ref<string>();
 const submission_xml = ref<string>();
 const shouldOnboard = ref(false);
+const activeProject = ref<string>();
 const isLoading = ref(true);
 const isModelerReady = ref(false);
 const isSavingReference = ref(false);
@@ -114,6 +116,7 @@ onMounted(async () => {
       await router.push("/");
       return;
     }
+    activeProject.value = active_project;
   } catch {
     await router.push("/");
     return;
@@ -130,6 +133,11 @@ onUnmounted(() => {
   window.removeEventListener("resize", handleResize);
   modeler.value?.destroy();
 });
+
+// Return to the landing screen to pick/switch projects. The backend keeps the
+// current project active until another is selected there, so this is a plain
+// navigation (no deselect endpoint needed).
+const switchProject = () => router.push("/");
 
 
 const updateRubric = (newRubric: Rubric) => {
@@ -306,7 +314,16 @@ const onOnboarded = async () => {
 
       <div class="flex flex-col w-full h-full relative overflow-hidden">
         <Tabs v-model:value="activeTab" class="flex flex-col h-full w-full" @update:value="onTabChange">
-          <div class="flex justify-center border-b border-gray-200 bg-gray-50/50 pt-2 shrink-0">
+          <div class="relative flex justify-center border-b border-gray-200 bg-gray-50/50 pt-2 shrink-0">
+            <button
+              type="button"
+              class="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded px-2 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200/60 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              title="Switch project"
+              @click="switchProject"
+            >
+              <ArrowLeft :size="16" class="shrink-0" />
+              <span class="font-medium max-w-[12rem] truncate">{{ activeProject ?? 'Projects' }}</span>
+            </button>
             <TabList>
               <Tab :value="TAB.SUBMISSION">Submission</Tab>
               <Tab :value="TAB.REFERENCE">Reference</Tab>

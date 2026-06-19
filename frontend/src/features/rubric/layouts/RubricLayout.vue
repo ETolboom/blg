@@ -80,7 +80,11 @@ const replayActive = ref<boolean>(false);
 
 const clearSelection = (): void => {
   const canvas = props.modeler.get('canvas');
+  const elementRegistry = props.modeler.get('elementRegistry');
   for (const id of currentHighlightElements.value) {
+    // The diagram may have been swapped (e.g. grading a new submission) so a
+    // previously-highlighted element no longer exists; removeMarker would throw.
+    if (!elementRegistry.get(id)) continue;
     canvas.removeMarker(id, HIGHLIGHT_MARKER);
   }
   currentHighlightElements.value = [];

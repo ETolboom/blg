@@ -14,6 +14,16 @@ from bpmn.struct import PoolElement
 logger = logging.getLogger(__name__)
 
 
+class BehavioralEvaluationError(Exception):
+    """A behavioral rule could not be evaluated against a BPMN model.
+
+    Raised for expected, user-facing conditions (e.g. the rule's start node has
+    no match in the model) rather than programming errors. The message is meant
+    to be shown to the user, so it is surfaced verbatim by the API rather than
+    masked as a generic 500.
+    """
+
+
 class NodeHandle(BaseModel):
     id: str
     type: str
@@ -880,7 +890,7 @@ class BehavioralRuleCheck(Check):
         # 1. Find starting workflow node
         workflow_start = _find_start_node(workflow.nodes, workflow.edges)
         if not workflow_start:
-            raise Exception("Could not find root node in workflow")
+            raise BehavioralEvaluationError("Could not find root node in workflow")
 
         logger.debug("Found starting workflow node: %s", workflow_start.id)
         logger.debug("Starting node label: '%s'", workflow_start.data.label)
@@ -902,7 +912,9 @@ class BehavioralRuleCheck(Check):
         # 4. Find starting BPMN element
         result = model.find_task(workflow_start.data.label, match_threshold=0.8)
         if not result:
-            raise Exception("Could not find start node in BPMN model")
+            raise BehavioralEvaluationError(
+                "Could not find start node in BPMN model"
+            )
         bpmn_start, start_score = result
 
         logger.debug(

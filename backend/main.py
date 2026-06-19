@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
+from checks.implementations.behavioral import BehavioralEvaluationError
 from checks.manager import CheckRegistry
 from schemas import ErrorResponse
 from routers import projects, submissions, rubric
@@ -70,6 +71,15 @@ async def _value_error_handler(request: Request, exc: ValueError):
 
 @app.exception_handler(ValidationError)
 async def _validation_error_handler(request: Request, exc: ValidationError):
+    return _error_response(422, str(exc))
+
+
+@app.exception_handler(BehavioralEvaluationError)
+async def _behavioral_eval_error_handler(
+    request: Request, exc: BehavioralEvaluationError
+):
+    # Expected, user-facing condition (e.g. a rule that doesn't match the model):
+    # surface the message instead of masking it as a generic 500.
     return _error_response(422, str(exc))
 
 
