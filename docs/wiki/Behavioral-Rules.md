@@ -1,7 +1,5 @@
 Behavioral Rules are the mechanism BLG uses to grade the **flow and ordering** of a student's BPMN model. They make up all LAYER 3 criteria.
 
-> **Video walkthrough:** *coming soon.*
-
 ---
 
 ## What is a Behavioral Rule?
@@ -48,7 +46,7 @@ A behavioral rule can express **parallel** or **alternative** paths using connec
 All branches leaving an AND split must be matched in the student's model. Points from all branches are summed.
 
 ```
-[Start Task] → [AND split] → [Branch A] ──┐
+[Start Task] → [AND split]  → [Branch A] ──┐
                             → [Branch B] ──┤─ AND Connector → [Merge Task]
 ```
 

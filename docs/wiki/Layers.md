@@ -2,8 +2,6 @@
 
 BLG organizes all grading criteria into three layers. The layer of a criterion describes how it works, what it requires from the instructor, and how much modeling detail it can assess.
 
-> **Video walkthrough:** *coming soon.*
-
 ---
 
 ## Overview
@@ -52,8 +50,6 @@ Use LAYER 2 checks when you want to verify specific structural facts about the m
 | **Task Type** | Expected task label → task type mappings | Tasks are modeled using the correct BPMN task type (user task, service task, etc.) |
 | **Task Coverage** | Expected task labels (auto-filled from the reference model) and a similarity threshold | All tasks from the reference model are present in the student's model |
 
-> *Note: Task Coverage is a non-scoring **diagnostic sanity gate**: it never awards points. It reports three outcomes: missing tasks → not fulfilled (rules likely can't match; grade manually); all present but with extra tasks → indeterminate (needs a human look); all present, no extras → fulfilled. Its expected-task list is pre-populated from the reference model during onboarding and remains editable in the rubric (just like the pool/lane and task-type inputs), which is what makes it a LAYER 2 check rather than a model-agnostic LAYER 1 one.*
-
 ---
 
 ## LAYER 3: Complex Model-Dependent Checks
@@ -71,21 +67,6 @@ Use LAYER 3 when you need to check that specific activities occur in a specific 
 - **Points**: granted only by Points nodes placed in the rule; a Points node is earned when traversal reaches it, so partial credit follows naturally when a student matches the earlier part of a rule but not the rest.
 
 See [Behavioral Rules](Behavioral-Rules) for a detailed explanation.
-
----
-
-## Choosing a Layer
-
-```
-Does the check apply to any BPMN model, regardless of the assignment?
-  └─ Yes → LAYER 1
-
-Is the check about specific structural facts (pools, lanes, task types)?
-  └─ Yes → LAYER 2
-
-Is the check about the flow or ordering of specific activities?
-  └─ Yes → LAYER 3
-```
 
 ---
 

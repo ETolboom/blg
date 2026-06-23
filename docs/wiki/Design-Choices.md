@@ -64,18 +64,6 @@ This page documents the key design decisions made in BLG and the rationale behin
 
 ## Hybrid Python/Rust Architecture
 
-**Decision:** Control-flow analysis (deadlock detection, dead activities, etc.) is implemented in Rust and exposed to Python via PyO3/maturin.
+**Decision:** Control-flow analysis (deadlock detection, dead activities, etc.) reuses an existing Rust library, `rust_bpmn_analyzer` by Tim Kräuter, exposed to Python through the `rust_bpmn_analyzer_bindings` package.
 
-**Rationale:** Control-flow analysis requires exhaustive state-space exploration, which is computationally intensive. Rust provides the performance needed to analyze non-trivial BPMN models in acceptable time. All other logic remains in Python for ease of development and extension.
-
----
-
-## Items to document
-
-> *The following topics are not yet covered on this page and should be added:*
-
-- [ ] Choice of `sentence-transformers/all-mpnet-base-v2` model
-- [ ] Decision to use FastAPI over other Python web frameworks
-- [ ] Front-end technology choices (blg-web)
-- [ ] Data directory layout rationale
-- [ ] XOR vs AND connector evaluation order
+**Rationale:** A capable implementation of this analysis already existed in Rust, so rather than reimplement exhaustive state-space exploration in Python, BLG simply wraps it. The choice of Rust was the upstream library's, not BLG's; BLG's contribution is the Python bindings that let the rest of the (Python) codebase call into it.

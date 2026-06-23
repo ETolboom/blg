@@ -2,8 +2,6 @@
 
 This page describes each node type available when building a [Behavioral Rule](Behavioral-Rules) and how BLG uses them during grading.
 
-> **Video walkthrough:** *coming soon.*
-
 ---
 
 ## Element Check
