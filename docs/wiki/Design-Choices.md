@@ -26,7 +26,7 @@ This page documents the key design decisions made in BLG and the rationale behin
 
 **Decision:** LAYER 3 criteria are expressed as directed graphs (behavioral rules) rather than as formal specifications or test cases.
 
-**Rationale:** Instructors are domain experts (e.g. business process modellers), not programmers. A visual graph editor is more accessible than a formal language. Graphs also map naturally onto the structure of BPMN, which itself is a graph of elements and flows.
+**Rationale:** Instructors are domain experts (e.g. business process modelers), not programmers. A visual graph editor is more accessible than a formal language. Graphs also map naturally onto the structure of BPMN, which itself is a graph of elements and flows.
 
 ---
 
