@@ -18,7 +18,7 @@ The combination of a [Reference BPMN Model](#reference-bpmn-model) and an option
 ## B
 
 ### Behavioral Rule
-A directed graph of [nodes](BPMN-Elements) and edges that describes the expected flow of a BPMN process. Each node represents either a BPMN element (task, event, data object) or a gateway, and each edge expresses a "followed by" relationship. BLG traverses a student's BPMN model and awards [points](#points) for each node that is correctly matched.
+A directed graph of [nodes](BPMN-Elements) and edges that describes the expected flow of a BPMN process. Each node represents either a BPMN element (task, event, data object) or a gateway, and each edge expresses a "followed by" relationship. BLG traverses a student's BPMN model, matching each node in turn, and awards [points](#points) from the Points nodes the traversal reaches.
 
 A behavioral rule is the primary tool for checking model-specific behavior (LAYER 3). It is stored as a JSON file and can be created and edited in the BLG interface.
 
@@ -174,7 +174,7 @@ A visual annotation node in a [Behavioral Rule](#behavioral-rule) that carries a
 ## P
 
 ### Points
-The numerical value awarded to a student for a [criterion](#criterion--check). Points are always non-negative. The full amount (the *default points* configured in the rubric) is awarded when the criterion is fulfilled; partial points may be awarded by [Behavioral Rules](#behavioral-rule) depending on how many nodes were successfully matched.
+The numerical value awarded to a student for a [criterion](#criterion--check). Points are always non-negative. For most criteria the full amount (the *default points* configured in the rubric) is awarded when the criterion is fulfilled. A [Behavioral Rule](#behavioral-rule) instead accumulates points from the dedicated [Points nodes](BPMN-Elements#points) its traversal reaches, so partial points follow when a student matches the earlier part of a rule but not the rest.
 
 The word *points* is used consistently throughout BLG. Avoid using "score" or "grade" to refer to this value.
 

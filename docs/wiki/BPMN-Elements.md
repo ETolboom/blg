@@ -79,9 +79,9 @@ A **Points** node assigns the credit awarded for a matched check. Rather than ca
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| **Points** | Points awarded when the attached check is matched | 0 |
+| **Points** | Value added to the rule's score when traversal reaches this node | 0 |
 
-Points are per-node, so a rule's total is the sum of the Points nodes for every check that matches, enabling fine-grained, proportional credit (see [Design Choices](Design-Choices)).
+A Points node's value is added to the rule's score only when traversal reaches it, which requires the checks before it to have matched. A rule's total is therefore the sum of the Points nodes the traversal reaches. Place one near the end to reward completing the whole flow, or several at intermediate positions for fine-grained, proportional partial credit (see [Design Choices](Design-Choices)).
 
 ---
 

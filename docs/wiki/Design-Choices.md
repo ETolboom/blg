@@ -30,11 +30,11 @@ This page documents the key design decisions made in BLG and the rationale behin
 
 ---
 
-## Points Per Node (Partial Credit)
+## Points Nodes (Partial Credit)
 
-**Decision:** Behavioral rules award points per matched node rather than all-or-nothing per rule.
+**Decision:** Behavioral rules carry credit on dedicated **Points** nodes placed in the rule graph, rather than awarding a fixed amount per matched node or all-or-nothing per rule. A Points node is earned only when traversal reaches it.
 
-**Rationale:** A student may correctly model most of a process but miss one step. Awarding zero points for the entire rule would not reflect their partial understanding. Per-node points allow fine-grained, proportional credit.
+**Rationale:** A student may correctly model most of a process but miss one step. Awarding zero points for the entire rule would not reflect their partial understanding. Putting points on explicit nodes lets the instructor decide exactly where credit is granted: one node near the end rewards completing the whole flow, while several intermediate nodes hand out proportional credit as successive parts of the rule are satisfied.
 
 ---
 

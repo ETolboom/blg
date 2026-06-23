@@ -58,7 +58,7 @@ Use LAYER 2 checks when you want to verify specific structural facts about the m
 
 ## LAYER 3: Complex Model-Dependent Checks
 
-LAYER 3 criteria assess the **behavioral flow** of the student's model using a [Behavioral Rule](Behavioral-Rules), a directed graph of elements, gateways and connectors drawn by the instructor. BLG traverses the student's BPMN and awards points for each correctly matched node.
+LAYER 3 criteria assess the **behavioral flow** of the student's model using a [Behavioral Rule](Behavioral-Rules), a directed graph of elements, gateways and connectors drawn by the instructor. BLG traverses the student's BPMN, matching each node in turn, and awards credit from the **Points** nodes the traversal reaches.
 
 LAYER 3 is the most expressive layer: it can verify ordering, gateway logic, distance between elements, and alternative or parallel solutions.
 
@@ -68,7 +68,7 @@ Use LAYER 3 when you need to check that specific activities occur in a specific 
 ### Key concepts
 - **Behavioral Rule**: a single workflow graph representing one expected behavior.
 - **Behavioral Rule Group**: multiple rules combined with AND (all required) or XOR (any one suffices).
-- **Points**: awarded per matched node; partial points are possible when some nodes match and others do not.
+- **Points**: granted only by Points nodes placed in the rule; a Points node is earned when traversal reaches it, so partial credit follows naturally when a student matches the earlier part of a rule but not the rest.
 
 See [Behavioral Rules](Behavioral-Rules) for a detailed explanation.
 

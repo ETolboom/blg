@@ -8,7 +8,7 @@ Behavioral Rules are the mechanism BLG uses to grade the **flow and ordering** o
 
 A behavioral rule is a **directed graph of nodes and edges** drawn by the instructor that represents the expected sequence of BPMN elements in a correct solution. When BLG grades a submission it walks the student's BPMN model and attempts to match each node in the rule graph to a real BPMN element.
 
-Points are awarded per successfully matched node. Partial credit is possible when only some nodes are matched.
+Matching a node does not by itself award any points. Credit comes only from dedicated **[Points](BPMN-Elements#points)** nodes that you place in the rule graph: a Points node's value is added to the score only when traversal reaches it, which requires every preceding check to have matched. Place a Points node near the end of the flow to award full credit for completing it, or place several at intermediate positions to grant partial credit as the student's model satisfies successive parts of the rule.
 
 ---
 
@@ -67,8 +67,9 @@ At least one branch must be matched. BLG tries every branch and selects the best
 1. BLG finds the start node in the rule (the unique node with no incoming edges).
 2. It locates the corresponding element in the student's BPMN using semantic similarity.
 3. It traverses the rule graph node by node, at each step searching the student's BPMN for the expected element within the configured distance.
-4. For each node found: points are awarded and a [MatchDetail](Glossary#match-score) is recorded.
-5. For each node not found: zero points and the element is recorded as problematic.
+4. For each check matched: a [MatchDetail](Glossary#match-score) is recorded and traversal continues to the next node.
+5. For each check not found: the element is recorded as problematic and that branch of traversal stops, so any Points nodes further along it are never reached.
+6. When traversal reaches a Points node, its configured value is added to the rule's score.
 
 ---
 
