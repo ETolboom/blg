@@ -143,6 +143,7 @@ const toggleSidebar = () => {
                         :submission-filename="submissionFilename"
                         @editCriterion="(c) => emit('editCriterion', c)"
                         @toggleHighlight="(_index, elements) => emit('toggleHighlight', -1, elements)"
+                        @updateNotes="(internal, feedback) => emit('updateNotes', criteria.indexOf(item), internal, feedback)"
                         @delete="emit('deleteCriterion', item.id || '')"
                       />
                       <RubricCriterion
