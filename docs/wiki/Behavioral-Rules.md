@@ -1,6 +1,6 @@
 Behavioral Rules are the mechanism BLG uses to grade the **flow and ordering** of a student's BPMN model. They make up all LAYER 3 criteria.
 
-> **Video walkthrough** — *coming soon.*
+> **Video walkthrough:** *coming soon.*
 
 ---
 
@@ -18,11 +18,13 @@ See [BPMN Elements in Behavioral Rules](BPMN-Elements) for full details on each 
 
 | Node type | Represents | Configurable options |
 |-----------|-----------|----------------------|
-| **Element** | A task, event, or data object | Label, points |
-| **Gateway** | A BPMN gateway | Type, expected outcomes, optional label and outcome labels, points |
+| **Element Check** | A task, event, or data object | Label |
+| **Gateway Check** | A BPMN gateway | Type, expected outcomes, optional label and outcome labels |
+| **Points** | Credit for an attached check | Points |
 | **followedBy** | Distance constraint between two nodes | Ideal distance, maximum distance |
-| **AND Connector** | All branches must be satisfied | — |
-| **XOR Connector** | At least one branch must be satisfied | — |
+| **AND Connector** | All branches must be satisfied | None |
+| **XOR Connector** | At least one branch must be satisfied | None |
+| **End** | Optional visual endpoint (ignored during grading) | None |
 | **Notes** | Annotation (ignored during grading) | Text |
 
 ---
@@ -31,8 +33,8 @@ See [BPMN Elements in Behavioral Rules](BPMN-Elements) for full details on each 
 
 An edge between two nodes in a behavioral rule means "the second element must follow the first". The **followedBy** connector (placed on the edge) refines this by specifying:
 
-- **Ideal distance** — the expected number of BPMN sequence flow edges between the two elements (default: 1, i.e. directly connected).
-- **Maximum distance** — the furthest acceptable distance (default: 2).
+- **Ideal distance**: the expected number of BPMN sequence flow edges between the two elements (default: 1, i.e. directly connected).
+- **Maximum distance**: the furthest acceptable distance (default: 2).
 
 Elements found beyond the maximum distance are not counted as matches. Elements found between ideal and maximum distance are matched but their BPMN IDs are included in `problematic_elements`.
 
@@ -81,8 +83,8 @@ A **Behavioral Rule Group** bundles multiple behavioral rules into a single rubr
 
 ### When to use groups
 
-- **XOR** — the student can choose one of several valid solutions (e.g. two alternative process designs).
-- **AND** — the process has distinct parts that must all be present (e.g. the happy path and the error path as separate rules).
+- **XOR**: the student can choose one of several valid solutions (e.g. two alternative process designs).
+- **AND**: the process has distinct parts that must all be present (e.g. the happy path and the error path as separate rules).
 
 ---
 
@@ -90,9 +92,9 @@ A **Behavioral Rule Group** bundles multiple behavioral rules into a single rubr
 
 Behavioral rules are created and edited in the BLG interface. They are stored as JSON files in the `rules/` directory of the data folder.
 
-> **Clip: Creating a behavioral rule** — *coming soon.*
+> **Clip: Creating a behavioral rule:** *coming soon.*
 
-> **Clip: Creating a rule group** — *coming soon.*
+> **Clip: Creating a rule group:** *coming soon.*
 
 ---
 
@@ -101,6 +103,6 @@ Behavioral rules are created and edited in the BLG interface. They are stored as
 - A rule must have **exactly one start node** (a node with no incoming edges).
 - Notes nodes are visual only and have no effect on grading.
 - The order in which you draw branches does not matter; BLG tries all paths.
-- Very long chains with a small maximum distance may fail to match elements that are separated by intermediate gateways in the student's model — adjust the maximum distance on the followedBy connector if needed.
+- Very long chains with a small maximum distance may fail to match elements that are separated by intermediate gateways in the student's model; adjust the maximum distance on the followedBy connector if needed.
 
 See [Modeling Considerations](Modeling-Considerations) for more.

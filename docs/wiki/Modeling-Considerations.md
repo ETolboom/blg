@@ -1,6 +1,6 @@
 This page documents known limitations of BLG's grading engine and gives practical guidance on how to model reference BPMN models and Behavioral Rules to get accurate results.
 
-> **Video walkthrough** — *coming soon.*
+> **Video walkthrough:** *coming soon.*
 
 ---
 
@@ -10,7 +10,7 @@ BLG matches element labels using sentence-embedding cosine similarity (via `sent
 
 - Small wording variations ("Send invoice" / "Invoice the customer") are usually tolerated.
 - Very short or generic labels ("Task 1", "Process", "Do something") may match poorly or ambiguously.
-- Language matters — the model performs best on English labels. Non-English labels may match less reliably.
+- Language matters: the model performs best on English labels. Non-English labels may match less reliably.
 
 **Recommendation:** use descriptive, domain-specific labels on all BPMN elements.
 
@@ -28,21 +28,21 @@ If a student's model includes an intermediate step not present in the behavioral
 
 **Solution:** increase the maximum distance on the followedBy connector between the two nodes in the rule.
 
-> *Modeling example — coming soon.*
+> *Modeling example (coming soon).*
 
 ### When gateways sit between elements
 
-Gateways in the student's model count towards the distance. A sequence `[Task A] → [XOR gateway] → [Task B]` has a distance of 2 between Task A and Task B.
+Gateways in the student's model count toward the distance. A sequence `[Task A] → [XOR gateway] → [Task B]` has a distance of 2 between Task A and Task B.
 
 **Solution:** set the ideal distance on the followedBy connector to 2 if a gateway is expected between the two tasks, or set the maximum distance higher to accommodate unexpected gateways.
 
-> *Modeling example — coming soon.*
+> *Modeling example (coming soon).*
 
 ---
 
 ## Boundary Events
 
-Boundary events (timer, message, error, signal, etc.) can be matched in behavioral rules using an Element node. BLG identifies boundary events by type rather than by label:
+Boundary events (timer, message, error, signal, etc.) can be matched in behavioral rules using an Element Check node. BLG identifies boundary events by type rather than by label:
 
 - A label containing "boundary event" matches any boundary event.
 - A label containing the event type (e.g. "message", "timer") matches boundary events of that type.
@@ -53,7 +53,7 @@ Boundary events (timer, message, error, signal, etc.) can be matched in behavior
 
 ## Multiple Start Nodes
 
-A behavioral rule must have **exactly one start node** — a node with no incoming edges. If the rule graph has multiple start nodes, BLG will raise an error and the criterion will not be evaluated.
+A behavioral rule must have **exactly one start node**: a node with no incoming edges. If the rule graph has multiple start nodes, BLG will raise an error and the criterion will not be evaluated.
 
 **Solution:** ensure the rule has a single entry point. If the process can begin in multiple ways, use an XOR connector at the start or create separate rules in a rule group.
 
@@ -69,7 +69,7 @@ BLG's behavioral rule traversal does not support loops. If the student's BPMN mo
 
 ## Large Parallel Structures
 
-AND branches in a behavioral rule are evaluated independently from the same starting position. This means the order in which elements appear across parallel lanes is not tracked — only that each expected element exists somewhere reachable from the divergence point.
+AND branches in a behavioral rule are evaluated independently from the same starting position. This means the order in which elements appear across parallel lanes is not tracked, only that each expected element exists somewhere reachable from the divergence point.
 
 ---
 
@@ -81,9 +81,9 @@ The Pool-Lane Check uses semantic similarity to match pool and lane names. Very 
 
 ---
 
-## Task Coverage (LAYER 1)
+## Task Coverage (LAYER 2)
 
-Task Coverage compares the labels of all tasks in the student's model against the labels of all tasks in the reference model using semantic similarity. It does not verify task order or placement.
+Task Coverage compares the labels of all tasks in the student's model against the labels of all tasks in the reference model using semantic similarity. It does not verify task order or placement, and it does not award points; it is a diagnostic sanity gate (see [The Three Layers](Layers)).
 
 **Known limitation:** if the student duplicates a task (models the same activity twice under different names), Task Coverage may still pass even though one of the duplicates is erroneous.
 
@@ -91,7 +91,7 @@ Task Coverage compares the labels of all tasks in the student's model against th
 
 ## Behavioral Rules are Not Exhaustive
 
-A behavioral rule only checks the elements it explicitly includes. Elements in the student's model that are not referenced in any rule are not graded (and not penalised). If you want to check the *absence* of a particular element, you need a dedicated LAYER 1 or LAYER 2 check.
+A behavioral rule only checks the elements it explicitly includes. Elements in the student's model that are not referenced in any rule are not graded (and not penalized). If you want to check the *absence* of a particular element, you need a dedicated LAYER 1 or LAYER 2 check.
 
 ---
 
@@ -101,6 +101,6 @@ Once a submission has been graded, BLG caches the result on disk. If you change 
 
 ---
 
-## Undo in workflows
+## Undo and redo in the rule editor
 
-When working in the workflow editor, CTRL-Z (and similar actions), currently do not have any effect. For now, in case any breaking changes were made, the page can be reloaded such that the last saved state of the workflow can be loaded.
+The behavioral rule editor supports undo and redo: press **Ctrl-Z** (or Cmd-Z) to undo and **Ctrl-Y** (or Cmd-Shift-Z) to redo. The editor keeps a bounded history of recent changes, so very old states may no longer be reachable. The editor also autosaves on a debounce, and reloading the page restores the last saved state.

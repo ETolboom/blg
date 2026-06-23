@@ -17,4 +17,4 @@ Welcome to the BLG wiki. Use the pages below to learn how the tool works, unders
 
 ---
 
-> **Video walkthroughs** — *coming soon.*
+> **Video walkthroughs:** *coming soon.*

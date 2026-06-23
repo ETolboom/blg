@@ -2,20 +2,21 @@
 
 This page describes each node type available when building a [Behavioral Rule](Behavioral-Rules) and how BLG uses them during grading.
 
-> **Video walkthrough** — *coming soon.*
+> **Video walkthrough:** *coming soon.*
 
 ---
 
-## Element
+## Element Check
 
-An **Element** node represents a BPMN task, intermediate event, or data object that must appear in the student's model at this point in the process.
+An **Element Check** node represents a BPMN task, intermediate event, or data object that must appear in the student's model at this point in the process.
 
 ### Configuration
 
 | Field | Description | Default |
 |-------|-------------|---------|
 | **Label** | The name of the expected BPMN element | *(required)* |
-| **Points** | Points awarded if this element is matched | 0 |
+
+To grant points, attach [Points](#points) node to award credit when this element is matched.
 
 ### How it is matched
 
@@ -23,23 +24,23 @@ BLG searches the student's BPMN starting from the current position and traversin
 
 | Match score | Outcome |
 |-------------|---------|
-| ≥ 0.8 | Ideal match — full points, not flagged |
-| ≥ 0.6 and < 0.8 | Acceptable match — full points, element flagged as problematic |
-| < 0.6 | No match — zero points, element flagged |
+| ≥ 0.8 | Ideal match: full points, not flagged |
+| ≥ 0.6 and < 0.8 | Acceptable match: full points, element flagged as problematic |
+| < 0.6 | No match: zero points, element flagged |
 
 ### Supported BPMN element types
 
 - Tasks of any type (user task, service task, script task, manual task, etc.)
 - Start and end events
 - Intermediate catch and throw events (timer, message, error, signal, …)
-- Boundary events — matched by event type (e.g. "message boundary event")
+- Boundary events: matched by event type (e.g. "message boundary event")
 - Data objects and data stores
 
 ---
 
-## Gateway
+## Gateway Check
 
-A **Gateway** node represents a BPMN gateway (a decision or fork/join point) that must appear in the student's model.
+A **Gateway Check** node represents a BPMN gateway (a decision or fork/join point) that must appear in the student's model.
 
 ### Configuration
 
@@ -47,11 +48,12 @@ A **Gateway** node represents a BPMN gateway (a decision or fork/join point) tha
 |-------|-------------|---------|
 | **Type** | Gateway type: XOR, AND, OR, event-based, or complex | *(required)* |
 | **Expected outcomes** | Number of outgoing branches | *(required)* |
-| **Points** | Points awarded if this gateway is matched | 0 |
-| **Gateway label** | Expected label on the gateway element | — |
+| **Gateway label** | Expected label on the gateway element | None |
 | **Check gateway label** | Whether to verify the gateway label | false |
-| **Outcome labels** | Expected labels on the outgoing sequence flows | — |
+| **Outcome labels** | Expected labels on the outgoing sequence flows | None |
 | **Check outcome labels** | Whether to verify the outcome labels | false |
+
+As with the Element Check, points are awarded via an attached [Points](#points) node rather than configured on the gateway node itself.
 
 ### Gateway type mapping
 
@@ -66,6 +68,20 @@ A **Gateway** node represents a BPMN gateway (a decision or fork/join point) tha
 ### How it is matched
 
 BLG looks for a gateway of the correct type with the correct number of outgoing branches within the configured distance. If label checking is enabled, the gateway's label and/or its outgoing flow labels are compared against the configured values using semantic similarity.
+
+---
+
+## Points
+
+A **Points** node assigns the credit awarded for a matched check. Rather than carrying points on the Element Check or Gateway Check itself, you attach a Points node to a check (or connector), keeping the points value separate from the element it rewards.
+
+### Configuration
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| **Points** | Points awarded when the attached check is matched | 0 |
+
+Points are per-node, so a rule's total is the sum of the Points nodes for every check that matches, enabling fine-grained, proportional credit (see [Design Choices](Design-Choices)).
 
 ---
 
@@ -104,7 +120,13 @@ An **XOR Connector** node marks the point where alternative branches converge. A
 
 ---
 
-## Notes Node
+## End
+
+An **End** node is an optional visual marker for where a path through the rule is meant to finish. Like the Notes node, it has **no effect on grading**: it is not matched to a BPMN element and carries no points. During evaluation BLG takes the rule's start to be the node with no incoming edges and traverses forward until a path runs out of successors; it does not consult End nodes. Use one only to make a rule's intended endpoint clearer to readers.
+
+---
+
+## Notes
 
 A **Notes** node is a visual annotation. It has a text field and can be connected to any other node for clarity, but is **completely ignored during grading**. Use it to add comments or reminders to a rule without affecting evaluation.
 

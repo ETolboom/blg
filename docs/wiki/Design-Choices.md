@@ -16,7 +16,7 @@ This page documents the key design decisions made in BLG and the rationale behin
 
 ## Layered Check Architecture
 
-**Decision:** Checks are organised into three layers (model-agnostic, simple model-dependent, complex model-dependent) with a plugin-based implementation system.
+**Decision:** Checks are organized into three layers (model-agnostic, simple model-dependent, complex model-dependent) with a plugin-based implementation system.
 
 **Rationale:** Different assignment types need different grading strategies. A single monolithic grader cannot cover all cases. Separating checks into layers makes it clear to instructors what each check does and what it requires. The plugin architecture allows new checks to be added without modifying core code.
 
@@ -58,7 +58,7 @@ This page documents the key design decisions made in BLG and the rationale behin
 
 **Decision:** Grading results are cached on disk as `.bpmn.json` files and reused on subsequent requests.
 
-**Rationale:** Grading a submission is computationally expensive — it runs all registered checks, loads ML models, and traverses the BPMN graph. Caching avoids repeating this work every time the instructor views a submission. The cache is invalidated automatically when the rubric changes.
+**Rationale:** Grading a submission is computationally expensive: it runs all registered checks, loads ML models, and traverses the BPMN graph. Caching avoids repeating this work every time the instructor views a submission. The cache is invalidated automatically when the rubric changes.
 
 ---
 
@@ -66,7 +66,7 @@ This page documents the key design decisions made in BLG and the rationale behin
 
 **Decision:** Control-flow analysis (deadlock detection, dead activities, etc.) is implemented in Rust and exposed to Python via PyO3/maturin.
 
-**Rationale:** Control-flow analysis requires exhaustive state-space exploration, which is computationally intensive. Rust provides the performance needed to analyse non-trivial BPMN models in acceptable time. All other logic remains in Python for ease of development and extension.
+**Rationale:** Control-flow analysis requires exhaustive state-space exploration, which is computationally intensive. Rust provides the performance needed to analyze non-trivial BPMN models in acceptable time. All other logic remains in Python for ease of development and extension.
 
 ---
 

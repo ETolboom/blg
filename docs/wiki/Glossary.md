@@ -1,7 +1,5 @@
 Definitions for all terms used in BLG. Terms are listed alphabetically.
 
-> **Note on old terminology.** Earlier versions of BLG used different names for several concepts. The table at the bottom of this page maps old names to current ones.
-
 ---
 
 ## A
@@ -22,7 +20,7 @@ The combination of a [Reference BPMN Model](#reference-bpmn-model) and an option
 ### Behavioral Rule
 A directed graph of [nodes](BPMN-Elements) and edges that describes the expected flow of a BPMN process. Each node represents either a BPMN element (task, event, data object) or a gateway, and each edge expresses a "followed by" relationship. BLG traverses a student's BPMN model and awards [points](#points) for each node that is correctly matched.
 
-A behavioral rule is the primary tool for checking model-specific behaviour (LAYER 3). It is stored as a JSON file and can be created and edited in the BLG interface.
+A behavioral rule is the primary tool for checking model-specific behavior (LAYER 3). It is stored as a JSON file and can be created and edited in the BLG interface.
 
 See [Behavioral Rules](Behavioral-Rules) for a full explanation.
 
@@ -41,7 +39,7 @@ See [Criterion](#criterion--check).
 ### Confidence
 A value between 0.0 and 1.0 that reflects how closely the student's BPMN model matched the expected elements in a criterion. A confidence of 1.0 means every matched element was an exact or near-exact match; lower values indicate weaker or partial matches.
 
-Confidence is distinct from whether a criterion is *fulfilled* — a criterion can be fulfilled with imperfect confidence, and the confidence score provides nuance for the instructor.
+Confidence is distinct from whether a criterion is *fulfilled*: a criterion can be fulfilled with imperfect confidence, and the confidence score provides nuance for the instructor.
 
 ### Criterion / Check
 A single grading unit in the [rubric](#rubric). Each criterion corresponds to one [implementation](#implementation) (e.g. "No Deadlocks", "Pool-Lane Check", "Behavioral Rule"). A criterion carries:
@@ -64,8 +62,8 @@ The number of points a student receives when a criterion is **fulfilled**. This 
 ### Distance
 In the context of [Behavioral Rules](#behavioral-rule), the distance between two matched elements is the number of BPMN flow edges that separate them in the student's model. Each node in a behavioral rule defines an *ideal distance* and a *maximum distance*:
 
-- **Ideal distance** — the expected number of edges (default: 1). Elements found at the ideal distance receive full credit.
-- **Maximum distance** — the furthest acceptable distance (default: 2). Elements found beyond the maximum distance are not matched.
+- **Ideal distance**: the expected number of edges (default: 1). Elements found at the ideal distance receive full credit.
+- **Maximum distance**: the furthest acceptable distance (default: 2). Elements found beyond the maximum distance are not matched.
 
 Elements found between the ideal and maximum distance are still matched but flagged as suboptimal and their BPMN element IDs are included in `problematic_elements`.
 
@@ -73,10 +71,10 @@ Elements found between the ideal and maximum distance are still matched but flag
 
 ## E
 
-### Element (Behavioral Rule Node)
+### Element Check (Behavioral Rule Node)
 A node type used in a [Behavioral Rule](#behavioral-rule) to represent a BPMN task, event, or data object that must appear in the student's model. When BLG evaluates a rule, it searches for the expected element starting from the current position and traversing the student's model up to the configured maximum distance.
 
-Previously called *Element Check*. See [BPMN Elements in Behavioral Rules](BPMN-Elements).
+Informally shortened to *Element*. See [BPMN Elements in Behavioral Rules](BPMN-Elements).
 
 ---
 
@@ -85,8 +83,8 @@ Previously called *Element Check*. See [BPMN Elements in Behavioral Rules](BPMN-
 ### followedBy (Connector)
 A special edge type in a [Behavioral Rule](#behavioral-rule) that sets the *distance constraints* between the source node and the next element or gateway node. It carries:
 
-- **Ideal distance** — how many BPMN edges should ideally separate the two elements.
-- **Maximum distance** — the furthest distance still considered a valid match.
+- **Ideal distance**: how many BPMN edges should ideally separate the two elements.
+- **Maximum distance**: the furthest distance still considered a valid match.
 
 When no followedBy connector is present, BLG uses the defaults (ideal: 1, max: 2).
 
@@ -97,18 +95,18 @@ A boolean flag on a [criterion](#criterion--check) that indicates whether the gr
 
 ## G
 
-### Gateway (Behavioral Rule Node)
+### Gateway Check (Behavioral Rule Node)
 A node type used in a [Behavioral Rule](#behavioral-rule) to represent a BPMN gateway (exclusive, parallel, inclusive, event-based, or complex) that must appear at a specific point in the student's model. A gateway node carries additional configuration:
 
-- **Type** — XOR, AND, OR, event-based, or complex.
-- **Expected outcomes** — the number of outgoing paths.
-- **Gateway label** *(optional)* — checked if "check gateway label" is enabled.
-- **Outcome labels** *(optional)* — labels on the outgoing flows, checked if "check outcome labels" is enabled.
+- **Type**: XOR, AND, OR, event-based, or complex.
+- **Expected outcomes**: the number of outgoing paths.
+- **Gateway label** *(optional)*: checked if "check gateway label" is enabled.
+- **Outcome labels** *(optional)*: labels on the outgoing flows, checked if "check outcome labels" is enabled.
 
-Previously called *Gateway Check*. See [BPMN Elements in Behavioral Rules](BPMN-Elements).
+Informally shortened to *Gateway*. See [BPMN Elements in Behavioral Rules](BPMN-Elements).
 
 ### Gateway Outcomes
-The expected number of outgoing branches from a [gateway node](#gateway-behavioral-rule-node) in a behavioral rule. BLG verifies that the matched gateway in the student's model has exactly this many outgoing edges.
+The expected number of outgoing branches from a [gateway node](#gateway-check-behavioral-rule-node) in a behavioral rule. BLG verifies that the matched gateway in the student's model has exactly this many outgoing edges.
 
 ---
 
@@ -127,7 +125,7 @@ Each implementation declares its layer, name, description, and accepted inputs.
 A subdivision of a [Pool](#pool) that represents a role or resource group responsible for a set of activities. BLG can check that the correct lanes exist with the correct names using the Pool-Lane Check (LAYER 2).
 
 ### LAYER 1: Quality Checks (Model-Agnostic)
-Criteria that are evaluated **without** a reference BPMN model. They assess general modelling quality properties that should hold regardless of what the process models — for example, the absence of deadlocks or semantically duplicate task labels. LAYER 1 criteria require no configuration input from the instructor.
+Criteria that are evaluated **without** a reference BPMN model. They assess general modeling quality properties that should hold regardless of what the process models. For example, the absence of deadlocks or semantically duplicate task labels. LAYER 1 criteria require no configuration input from the instructor.
 
 Built-in LAYER 1 checks:
 | Check | Description |
@@ -135,29 +133,23 @@ Built-in LAYER 1 checks:
 | No Deadlocks | The process can always reach its end state |
 | Dead Activities | All activities are reachable |
 | Unique End Event Execution | There is exactly one unambiguous path to the end event |
-| Synchronization | Concurrent activities are properly synchronised |
-| Task Coverage | All expected tasks from the reference model are present |
+| Synchronization | Concurrent activities are properly synchronized |
 | Label Atomicity | Task labels express a single action |
 | Exact Duplicate Tasks | No tasks share an identical or near-identical label |
 | Semantically Duplicate Tasks | No tasks share a semantically equivalent label |
 
-*Formerly called "Simple" checks.*
-
 ### LAYER 2: Simple Model-Dependent Checks
-Criteria that require **configuration inputs** from the instructor but do not involve a full workflow graph. They check structural properties of the student's model against instructor-specified values — for example, verifying that specific pools and lanes are present with correct names, or that tasks are of the correct BPMN type.
+Criteria that require **configuration inputs** from the instructor but do not involve a full workflow graph. They check structural properties of the student's model against instructor-specified values. For example, verifying that specific pools and lanes are present with correct names, or that tasks are of the correct BPMN type.
 
 Built-in LAYER 2 checks:
 | Check | Description |
 |-------|-------------|
 | Pool-Lane Check | Verifies expected pools and lanes by name |
 | Task Type | Verifies that tasks use the correct BPMN task type (user task, service task, etc.) |
-
-*Formerly called "Configurable" checks.*
+| Task Coverage | Checks that all expected tasks from the reference model are present (non-scoring diagnostic gate) |
 
 ### LAYER 3: Complex Model-Dependent Checks
-Criteria that evaluate the **behavioural flow** of the student's model against a graph of expected elements and transitions. These are always [Behavioral Rules](#behavioral-rule) (or [Behavioral Rule Groups](#behavioral-rule-group)) and can capture ordering, gateway logic, and distance constraints.
-
-*Formerly called "Complex" checks.*
+Criteria that evaluate the **behavioral flow** of the student's model against a graph of expected elements and transitions. These are always [Behavioral Rules](#behavioral-rule) (or [Behavioral Rule Groups](#behavioral-rule-group)) and can capture ordering, gateway logic, and distance constraints.
 
 ---
 
@@ -166,9 +158,9 @@ Criteria that evaluate the **behavioural flow** of the student's model against a
 ### Match Score
 A value between 0.0 and 1.0 reflecting the semantic similarity between a workflow node's label and the label of the matched BPMN element in the student's model. BLG uses sentence-embedding cosine similarity to compute match scores:
 
-- **≥ 0.8** — ideal match (full credit, no flag).
-- **≥ 0.6 and < 0.8** — acceptable match (credit awarded but element flagged as suboptimal).
-- **< 0.6** — no match (element not found).
+- **≥ 0.8**: ideal match (full credit, no flag).
+- **≥ 0.6 and < 0.8**: acceptable match (credit awarded but element flagged as suboptimal).
+- **< 0.6**: no match (element not found).
 
 ---
 
@@ -187,7 +179,7 @@ The numerical value awarded to a student for a [criterion](#criterion--check). P
 The word *points* is used consistently throughout BLG. Avoid using "score" or "grade" to refer to this value.
 
 ### Pool
-The top-level container element in a BPMN model, typically representing a participant or organisation. A BPMN model may contain multiple pools. BLG's Pool-Lane Check (LAYER 2) can verify that the expected pools and their lanes are present in the student's model.
+The top-level container element in a BPMN model, typically representing a participant or organization. A BPMN model may contain multiple pools. BLG's Pool-Lane Check (LAYER 2) can verify that the expected pools and their lanes are present in the student's model.
 
 ### Problematic Elements
 A list of BPMN element IDs flagged during grading of a criterion. An element is flagged when:
@@ -238,20 +230,3 @@ A node used inside a [Behavioral Rule](#behavioral-rule) to express that **at le
 
 ### XOR Condition (Rule Group)
 When a [Behavioral Rule Group](#behavioral-rule-group) uses the XOR condition, **at least one** rule in the group must be satisfied. The points awarded equal those of the best-performing rule. Use XOR when students may produce alternative but equally valid solutions.
-
----
-
-## Deprecated Terminology
-
-The following terms appeared in earlier versions of BLG and should no longer be used.
-
-| Old term | Current term |
-|----------|--------------|
-| Template | [Behavioral Rule](#behavioral-rule) |
-| Algorithm | [Implementation](#implementation) or [Criterion / Check](#criterion--check) |
-| Simple | [LAYER 1: Quality Checks](#layer-1-quality-checks-model-agnostic) |
-| Configurable | [LAYER 2: Simple Model-Dependent Checks](#layer-2-simple-model-dependent-checks) |
-| Complex | [LAYER 3: Complex Model-Dependent Checks](#layer-3-complex-model-dependent-checks) |
-| Element Check | [Element](#element-behavioral-rule-node) |
-| Gateway Check | [Gateway](#gateway-behavioral-rule-node) |
-| Score | [Points](#points) |
