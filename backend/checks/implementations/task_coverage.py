@@ -18,24 +18,16 @@ def _coverage_detail(missing: list[str], unexpected: list[str]) -> CheckDetail |
     """Build the info-pop-up breakdown, omitting empty sections."""
     sections = []
     if missing:
-        sections.append(
-            CheckDetailSection(label="Missing tasks", severity="error", items=missing)
-        )
+        sections.append(CheckDetailSection(label="Missing tasks", severity="error", items=missing))
     if unexpected:
-        sections.append(
-            CheckDetailSection(
-                label="Unmatched tasks", severity="warn", items=unexpected
-            )
-        )
+        sections.append(CheckDetailSection(label="Unmatched tasks", severity="warn", items=unexpected))
     return CheckDetail(sections=sections) if sections else None
 
 
 class TaskCoverageCheck(Check):
     id: ClassVar[str] = "task_coverage"
     name: ClassVar[str] = "Task Coverage"
-    description: ClassVar[str] = (
-        "Checks that the model covers all expected tasks from the reference model"
-    )
+    description: ClassVar[str] = "Checks that the model covers all expected tasks from the reference model"
     check_complexity: ClassVar[CheckComplexity] = CheckComplexity.CONFIGURABLE
     threshold: ClassVar[float] = 0.8
     supports_threshold_override: ClassVar[bool] = True
@@ -46,7 +38,11 @@ class TaskCoverageCheck(Check):
         "A reference task counts as covered when a student task is at least this "
         "similar. Lower it to match more loosely (fewer tasks flagged as missing)."
     )
-    input_scheme: ClassVar[list[CheckFormInput]] = []
+    # Expected tasks are configured as a single editable list, autofilled from
+    # the reference model during onboarding (mirrors Pool-Lane / Task Type).
+    input_scheme: ClassVar[list[CheckFormInput]] = [
+        StringFormInput(input_label="Expected tasks", data=[], multiple=True),
+    ]
     # Diagnostic sanity gate: never awards points.
     awards_points: ClassVar[bool] = False
 
@@ -67,15 +63,9 @@ class TaskCoverageCheck(Check):
         tasks: list[ExtractedTask] = extract_all_tasks(self.model_xml)
 
         if inputs is None:
-            # Use self.model_xml as the reference — extract task labels and return as inputs
-            reference_inputs = [
-                StringFormInput(
-                    input_label=task.name,
-                    data=task.name,
-                )
-                for task in tasks
-                if task.name and task.name.strip()
-            ]
+            # Use self.model_xml as the reference — extract task labels and return
+            # them as a single editable list input (autofilled, like Pool-Lane).
+            reference_labels = [task.name for task in tasks if task.name and task.name.strip()]
             return CheckResult(
                 id=self.id,
                 name=self.name,
@@ -83,15 +73,21 @@ class TaskCoverageCheck(Check):
                 check_complexity=self.check_complexity,
                 fulfilled=True,
                 problematic_elements=[],
-                inputs=reference_inputs,
+                inputs=[
+                    StringFormInput(
+                        input_label="Expected tasks",
+                        data=reference_labels,
+                        multiple=True,
+                    )
+                ],
             )
 
-        # inputs contains one CheckFormInput per reference task (data = task label)
-        reference_labels = [
-            str(inp.data)
-            for inp in inputs
-            if isinstance(inp.data, str) and inp.data.strip()
-        ]
+        # Expected tasks are a single multi-value string input (the "Expected
+        # tasks" list, autofilled from the reference and editable in the rubric).
+        expected_input = inputs[0]
+        if not isinstance(expected_input, StringFormInput) or not isinstance(expected_input.data, list):
+            raise ValueError("Task Coverage requires a multi-value 'Expected tasks' string input")
+        reference_labels = [label for label in expected_input.data if label.strip()]
 
         if not reference_labels:
             return CheckResult(
@@ -123,9 +119,7 @@ class TaskCoverageCheck(Check):
         student_labels = [task.name for task in tasks if task.name]
 
         # similarity_matrix shape: [len(reference_labels), len(student_labels)]
-        similarity_matrix = create_similarity_matrix(
-            reference_labels, student_labels, self_similarity=False
-        )
+        similarity_matrix = create_similarity_matrix(reference_labels, student_labels, self_similarity=False)
 
         # How many reference tasks are covered by at least one student task?
         best_ref_scores = torch.max(similarity_matrix, dim=1).values
@@ -134,9 +128,7 @@ class TaskCoverageCheck(Check):
 
         # Expected (reference) tasks that no student task matched well enough.
         missing = [
-            label
-            for label, score in zip(reference_labels, best_ref_scores)
-            if score.item() < effective_threshold
+            label for label, score in zip(reference_labels, best_ref_scores) if score.item() < effective_threshold
         ]
 
         # Student tasks with no clear reference counterpart are flagged (ids for
