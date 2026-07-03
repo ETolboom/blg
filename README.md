@@ -2,8 +2,6 @@
 
 **BPMN Learn & Grade (BLG)** is a web-based tool for grading student BPMN (Business Process Model and Notation) submissions. BLG lets educators define rubrics, build behavioral validation rules, and grade student work against a reference model.
 
-This repository is a monorepo containing both the REST API back-end (`backend/`) and the Vue.js front-end (`frontend/`).
-
 ![Grading interface](docs/images/grading-view.png)
 
 ---
