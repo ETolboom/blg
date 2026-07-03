@@ -4,34 +4,15 @@
 
 This repository is a monorepo containing both the REST API back-end (`backend/`) and the Vue.js front-end (`frontend/`).
 
----
-
-## Architecture
-
-```
-blg/
-├── backend/                       # FastAPI back-end
-│   ├── main.py                    # Entry point
-│   ├── checks/                    # Grading logic & rule engine
-│   ├── routers/                   # API routes
-│   ├── bpmn/                      # BPMN XML parser
-│   ├── rules/                     # Behavioral rule manager
-│   ├── rubric/                    # Rubric models
-│   └── example/                   # Sample data (rubric, submissions, rules)
-├── frontend/                      # Vue 3 + PrimeVue front-end
-│   ├── src/                       # Components, Views, router
-│   ├── package.json
-│   └── vite.config.ts
-├── docker-compose.yml             # Orchestration
-├── Makefile                       # Development helpers
-└── README.md
-```
+![Grading interface](docs/images/grading-view.png)
 
 ---
 
 ## Features
 
 ### Front-end (UI)
+- **Assignment management**: A landing page to pick an existing assignment or create a new one; each assignment has its own rubric, rules, and submissions.
+- **Submission upload**: Upload student `.bpmn` files directly from the grading interface, so no manual file copying is required.
 - **Rubric management**: Define criteria with point values; supports simple checks and group criteria with XOR/AND logic.
 - **Visual rule builder**: Node-based editor to build behavioral validation rules (element checks, gateway checks, connectors).
 - **BPMN viewer**: Side-by-side view of student submission, reference model, and assignment PDF.
@@ -45,6 +26,22 @@ blg/
 - **Formal control-flow analysis**: deadlock and dead-activity detection.
 - **Excel export**: per-submission and bulk grading results exportable as `.xlsx`.
 - **Rule groups**: combine multiple behavioral rules under XOR (alternative solutions) or AND (all required) conditions.
+
+---
+
+## Screenshots
+
+**Assignments landing page**: pick an existing assignment or create a new one:
+
+![Assignments landing page](docs/images/project-view.png)
+
+**Onboarding wizard**: upload a reference model and configure the initial rubric:
+
+![Onboarding wizard](docs/images/onboarding-view.png)
+
+**Visual rule builder**: build behavioral validation rules from a node-based editor:
+
+![Visual rule builder](docs/images/behavioral-rule-view.png)
 
 ---
 
@@ -71,7 +68,7 @@ docker compose up --build -d   # build & start at http://localhost:8000
 docker compose down
 ```
 
-Because `docker-compose.yml` mounts `./backend/assignment` into the container, any rubrics or rules you create in the web UI are saved to your local `backend/assignment` folder. The backend scaffolds the required subdirectories (`submissions/`, `rules/`, `templates/`) on first run.
+Because `docker-compose.yml` mounts `./backend/data` into the container, any assignments, rubrics, rules, and uploaded submissions you create in the web UI are saved to your local `backend/data` folder. The backend scaffolds the data layout (`assignments/` and a global `templates/`) on first run; each assignment gets its own `submissions/`, `rules/`, and rubric.
 
 > **Linux:** you may need `sudo`, or add your user to the `docker` group first.
 
@@ -86,13 +83,13 @@ A `Makefile` at the repo root simplifies setup and execution. It auto-detects `u
 make install
 ```
 
-**2. Start the back-end** (data root defaults to `./assignment`, port 8000):
+**2. Start the back-end** (data root defaults to `./data`, port 8000):
 ```bash
 make run-backend
-make run-backend DATA_DIR=my_class_data   # custom data directory
+make run-backend DATA_DIR=my_class_data   # only needed for a non-default data directory
 ```
 
-The back-end will automatically create the data root and initialize its folder structure if it doesn't exist.
+You don't normally need to set `DATA_DIR`; the back-end serves all your assignments from a single data root, and you pick or create individual assignments from the landing page in the web UI. Only override it if you want to keep your data somewhere other than `./data`. The back-end automatically creates the data root and initializes its folder structure if it doesn't exist.
 
 **3. Start the front-end** dev server at `http://localhost:5173` (in a new terminal):
 ```bash
@@ -125,7 +122,7 @@ cd ..\frontend
 npm install                            # or: bun install
 
 # --- Run back-end (from backend\) ---
-python main.py ..\assignment           # replace 'assignment' with your data directory
+python main.py ..\data                 # data root; assignments are managed from the web UI
 
 # --- Run front-end (from frontend\, in a new terminal) ---
 npm run dev                            # or: bun run dev
@@ -138,54 +135,11 @@ Copy-Item -Recurse dist ..\backend\static
 
 ---
 
-## API Overview (Back-end)
+## Using the app
 
-Interactive API docs are available at `http://127.0.0.1:8000/docs` when the back-end is running.
+Once the back-end and front-end are running, open the app in your browser and:
 
-| Method   | Path                                        | Description                              |
-|----------|---------------------------------------------|------------------------------------------|
-| `GET`    | `/api/rubric`                               | Fetch the current rubric                 |
-| `POST`   | `/api/rubric`                               | Create a rubric via onboarding payload   |
-| `DELETE` | `/api/rubric/criteria/{id}`                 | Remove a rubric criterion                |
-| `GET`    | `/api/submissions`                          | List all student submissions             |
-| `POST`   | `/api/submissions`                          | Upload `.bpmn` files                     |
-| `GET`    | `/api/submissions/{filename}`               | Download raw BPMN XML                    |
-| `GET`    | `/api/submissions/export`                   | Export a single result as `.xlsx`        |
-| `GET`    | `/api/submissions/export/all`               | Export all results as `.xlsx`            |
-| `GET`    | `/api/checks`                               | List all registered checks               |
-| `POST`   | `/api/checks/analyze`                       | Analyze a submission against the rubric  |
-| `POST`   | `/api/checks/analyze/all`                   | List applicable checks for a given model |
-| `GET`    | `/api/behavioral-rules`                     | List behavioral rules                    |
-| `POST`   | `/api/behavioral-rules`                     | Create a rule                            |
-| `PUT`    | `/api/behavioral-rules/{id}`                | Update a rule                            |
-| `DELETE` | `/api/behavioral-rules/{id}`                | Delete a rule                            |
-| `POST`   | `/api/behavioral-rules/{id}/validate`       | Validate a rule against a BPMN model     |
-| `GET`    | `/api/behavioral-rule-groups`               | List rule groups                         |
-| `POST`   | `/api/behavioral-rule-groups`               | Create a rule group                      |
-| `PUT`    | `/api/behavioral-rule-groups/{id}`          | Update a rule group                      |
-| `DELETE` | `/api/behavioral-rule-groups/{id}`          | Delete a rule group                      |
-| `POST`   | `/api/behavioral-rule-groups/{id}/validate` | Validate a group against a BPMN model    |
-
----
-
-## Adding a New Check
-
-1. Create a `.py` file in `backend/checks/implementations/`.
-2. Subclass `Check` and define the required `ClassVar` fields (`id`, `name`, `description`, `check_complexity`, `input_scheme`).
-3. Implement `analyze()` and `is_applicable()`.
-
-The check is auto-discovered and registered on the next server start with no additional wiring required.
-
----
-
-## Linting & Formatting
-
-Run from `backend/`. Configured in `pyproject.toml` (rules: E, F, UP; double-quote style).
-
-```bash
-# Linux/macOS
-ruff check . && ruff format .
-
-# Windows (PowerShell)
-ruff check .; ruff format .
-```
+1. **Pick or create an assignment** on the landing page. Each assignment is self-contained (its own reference model, rubric, rules, and submissions) and lives under `assignments/` in the data root, so there's no need to point the back-end at a different data directory per class.
+2. **Complete onboarding** for a new assignment: upload the reference BPMN model and configure the initial rubric.
+3. **Upload student submissions** as `.bpmn` files from the grading interface.
+4. **Grade** each submission against the rubric and export results to `.xlsx`.
