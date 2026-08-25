@@ -32,6 +32,7 @@ const reference_xml = ref<string>();
 const submission_xml = ref<string>();
 const shouldOnboard = ref(false);
 const activeProject = ref<string>();
+const isDemoLocked = ref(false);
 const isLoading = ref(true);
 const isModelerReady = ref(false);
 const isSavingReference = ref(false);
@@ -111,12 +112,13 @@ onMounted(async () => {
   // 2. Once rubric is loaded, create a modeler
 
   try {
-    const { active_project } = await projectService.getActiveProject();
+    const { active_project, demo_locked } = await projectService.getActiveProject();
     if (!active_project) {
       await router.push("/");
       return;
     }
     activeProject.value = active_project;
+    isDemoLocked.value = demo_locked === true;
   } catch {
     await router.push("/");
     return;
@@ -316,6 +318,7 @@ const onOnboarded = async () => {
         <Tabs v-model:value="activeTab" class="flex flex-col h-full w-full" @update:value="onTabChange">
           <div class="relative flex justify-center border-b border-gray-200 bg-gray-50/50 pt-2 shrink-0">
             <button
+              v-if="!isDemoLocked"
               type="button"
               class="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded px-2 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200/60 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               title="Switch project"
@@ -324,6 +327,11 @@ const onOnboarded = async () => {
               <ArrowLeft :size="16" class="shrink-0" />
               <span class="font-medium max-w-[12rem] truncate">{{ activeProject ?? 'Projects' }}</span>
             </button>
+            <!-- Pinned demo: there is nothing to switch to, so show the name only. -->
+            <span
+              v-else
+              class="absolute left-3 top-1/2 -translate-y-1/2 px-2 py-1 text-sm font-medium text-gray-600 max-w-[12rem] truncate"
+            >{{ activeProject }}</span>
             <TabList>
               <Tab :value="TAB.SUBMISSION">Submission</Tab>
               <Tab :value="TAB.REFERENCE">Reference</Tab>

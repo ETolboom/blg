@@ -11,6 +11,7 @@ const toast = useToast();
 const projects = ref<string[]>([]);
 const isLoading = ref<boolean>(true);
 const isBusy = ref<boolean>(false);
+const isDemoLocked = ref<boolean>(false);
 const createDialogVisible = ref<boolean>(false);
 const newProjectName = ref<string>("");
 
@@ -54,7 +55,23 @@ const createProject = async () => {
   }
 };
 
-onMounted(loadProjects);
+onMounted(async () => {
+  // A pinned demo deployment already has its one assignment selected, so skip
+  // the picker entirely. `replace` rather than `push` so Back doesn't bounce
+  // the visitor straight back here.
+  try {
+    const { active_project, demo_locked } = await projectService.getActiveProject();
+    isDemoLocked.value = demo_locked === true;
+    if (isDemoLocked.value && active_project) {
+      await router.replace("/grade");
+      return;
+    }
+  } catch {
+    // Fall through to the normal picker; loadProjects reports its own errors.
+  }
+
+  await loadProjects();
+});
 </script>
 
 <template>
@@ -68,7 +85,12 @@ onMounted(loadProjects);
       <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
         <div class="flex items-center justify-between px-5 py-3 border-b border-gray-200">
           <span class="font-semibold text-gray-700">Assignments</span>
-          <Button label="New assignment" size="small" @click="createDialogVisible = true">
+          <Button
+            v-if="!isDemoLocked"
+            label="New assignment"
+            size="small"
+            @click="createDialogVisible = true"
+          >
             <template #icon><Plus :size="16" class="mr-1" /></template>
           </Button>
         </div>

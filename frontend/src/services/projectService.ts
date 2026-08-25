@@ -2,6 +2,9 @@ import { apiGet, apiPost } from './api';
 
 export interface ActiveProject {
     active_project: string | null;
+    // Set by a demo deployment pinned to a single assignment: there is nothing
+    // to pick or switch to, so the picker and create/switch controls are hidden.
+    demo_locked?: boolean;
 }
 
 export const projectService = {

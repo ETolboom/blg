@@ -3,6 +3,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from demo_mode import demo_mode_enabled, demo_project
 from dependencies import set_active_project
 from schemas import ActiveProjectResponse, ProjectActionResponse
 from utils import safe_join
@@ -30,7 +31,10 @@ async def list_projects(request: Request) -> list[str]:
 @router.get("/projects/active")
 async def get_active_project(request: Request) -> ActiveProjectResponse:
     """Return the currently active project (or null if none selected)."""
-    return ActiveProjectResponse(active_project=request.app.state.active_project)
+    return ActiveProjectResponse(
+        active_project=request.app.state.active_project,
+        demo_locked=bool(demo_mode_enabled() and demo_project()),
+    )
 
 
 @router.post("/projects/{name}/select")

@@ -2,6 +2,10 @@ import functools
 import logging
 from xml.etree import ElementTree
 
+# Untrusted model XML -- see the note in utils/__init__.py. stdlib ElementTree is
+# kept only for its element types; all parsing goes through defusedxml.
+from defusedxml.ElementTree import fromstring as parse_model_xml
+
 from bpmn.struct import Pool, PoolElement, parse_lane_set
 from utils.similarity import create_similarity_matrix
 
@@ -32,7 +36,7 @@ class Bpmn:
 
     def __parse_xml(self, xml_string: str):
         """Parse raw BPMN XML and populate pools, elements, flows and lanes."""
-        root = ElementTree.fromstring(xml_string)
+        root = parse_model_xml(xml_string)
 
         namespace = {"bpmn": "http://www.omg.org/spec/BPMN/20100524/MODEL"}
 

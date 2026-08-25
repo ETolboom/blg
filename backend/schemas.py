@@ -19,6 +19,10 @@ class ActiveProjectResponse(BaseModel):
     """The currently active project, or ``null`` when none is selected."""
 
     active_project: str | None
+    # True when a demo deployment is pinned to a single project: the frontend
+    # then skips the picker and hides the create/switch controls, since there
+    # is nothing else to switch to.
+    demo_locked: bool = False
 
 
 class ProjectActionResponse(MessageResponse):

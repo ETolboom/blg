@@ -4,6 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 
 import uvicorn
+from defusedxml.common import DefusedXmlException
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +12,8 @@ from pydantic import ValidationError
 
 from checks.implementations.behavioral import BehavioralEvaluationError
 from checks.manager import CheckRegistry
+from demo_mode import demo_mode_enabled, demo_project, register_demo_mode
+from dependencies import set_active_project
 from schemas import ErrorResponse
 from routers import projects, submissions, rubric
 from routers import checks as checks_router
@@ -42,10 +45,21 @@ async def lifespan(app: FastAPI):
     app.state.rule_manager = None
     app.state.submission_service = None
 
+    # A pinned demo deployment starts with its one assignment already selected,
+    # so visitors land in the grading UI rather than a single-item picker. Never
+    # fatal: a bad pin leaves the app in the normal "pick a project" state.
+    pinned = demo_project()
+    if pinned and demo_mode_enabled():
+        try:
+            set_active_project(app, pinned)
+        except Exception:
+            logger.exception("Could not preselect DEMO_PROJECT=%r", pinned)
+
     yield
 
 
 app = FastAPI(lifespan=lifespan)
+register_demo_mode(app)
 
 
 # Centralized exception handling: map common domain errors to the right status
@@ -67,6 +81,14 @@ async def _file_not_found_handler(request: Request, exc: FileNotFoundError):
 @app.exception_handler(ValueError)
 async def _value_error_handler(request: Request, exc: ValueError):
     return _error_response(400, str(exc))
+
+
+@app.exception_handler(DefusedXmlException)
+async def _defused_xml_handler(request: Request, exc: DefusedXmlException):
+    # A DefusedXmlException is a ValueError, so without this it would surface as
+    # the generic 400 carrying defusedxml's internal repr. Say what's actually
+    # wrong instead — legitimate BPMN never declares entities or a DTD.
+    return _error_response(400, "Unsupported XML: DTD or entity declarations are not allowed")
 
 
 @app.exception_handler(ValidationError)

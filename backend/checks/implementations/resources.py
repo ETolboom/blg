@@ -1,6 +1,8 @@
 import logging
 from typing import ClassVar
 
+from defusedxml.common import DefusedXmlException
+
 from checks import (
     Check,
     CheckComplexity,
@@ -209,6 +211,12 @@ class PoolLaneCheck(Check):
         try:
             get_elements_by_type(self.model_xml, "process")
             get_elements_by_type(self.model_xml, "lane")
+        except DefusedXmlException:
+            # A rejected parse means the document is hostile, not that this check
+            # doesn't apply to it. DefusedXmlException is a ValueError, so it has
+            # to be re-raised ahead of the clause below or it reads as "not
+            # applicable" and the request quietly returns a short check list.
+            raise
         except TypeError as e:
             logger.info("Check '%s' is not applicable: %s", self.name, e)
             return False

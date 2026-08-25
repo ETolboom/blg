@@ -2,7 +2,12 @@ import functools
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from xml.etree import ElementTree
+
+# Model XML is untrusted: submissions are uploaded, and /checks/analyze/all takes
+# a raw body. stdlib ElementTree expands internal entities with no limit (a few
+# hundred bytes can expand to gigabytes), so parse through defusedxml, which
+# rejects entity declarations outright. Real BPMN never declares entities.
+from defusedxml import ElementTree
 
 from utils.paths import safe_join as safe_join
 

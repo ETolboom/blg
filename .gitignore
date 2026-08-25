@@ -1,3 +1,6 @@
 .git
 .idea
 /backend/data/
+
+# Demo TLS certs (self-signed; contains private key)
+/deploy/certs/

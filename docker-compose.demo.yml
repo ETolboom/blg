@@ -1,0 +1,103 @@
+# Demo deployment override: read-only mode + Traefik HTTPS ingress.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
+# Set DEMO_DOMAIN, and generate a cert first: scripts/gen-selfsigned-cert.sh $DEMO_DOMAIN
+# (Behind the university WAF a self-signed cert is sufficient; swap in a real
+# cert by replacing deploy/certs/{cert,key}.pem.)
+services:
+  backend:
+    environment:
+      - DEMO_MODE=1
+      # Pin the demo to one assignment: selected at startup, and the only one
+      # POST /api/projects/{name}/select will accept.
+      - DEMO_PROJECT=${DEMO_PROJECT:-Webshop}
+    # Traefik restarts on its own; without this the backend stays down after a
+    # crash or host reboot and the public demo serves 502s indefinitely.
+    restart: unless-stopped
+    # Read-only, and pointed at a directory outside the checkout by default on a
+    # host. Nothing in demo mode writes to the data root, so the kernel enforcing
+    # that is what keeps the dataset pristine -- no snapshot/restore needed.
+    volumes: !override
+      - ${DEMO_DATA_DIR:-./backend/data}:/app/data:ro
+    # Traefik is the only ingress; do not publish port 8000.
+    ports: !override []
+    # `edge` only -- deliberately not on the socket network, so a compromised
+    # backend has no route to the Docker API proxy at all.
+    networks:
+      - edge
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.blg.rule=Host(`${DEMO_DOMAIN}`)
+      - traefik.http.routers.blg.entrypoints=websecure
+      - traefik.http.routers.blg.tls=true
+      - traefik.http.routers.blg.middlewares=blg-ratelimit,blg-bodysize
+      # NOTE: this limit is global, not per-IP. Traefik keys the rate limiter on
+      # the remote address, and behind the WAF every request arrives from the
+      # WAF's address, so all visitors share one budget -- hence the headroom.
+      # See the README for what it takes to make it per-IP safely.
+      - traefik.http.middlewares.blg-ratelimit.ratelimit.average=50
+      - traefik.http.middlewares.blg-ratelimit.ratelimit.burst=100
+      # Per-IP variant; enable together with forwardedHeaders.trustedIPs below.
+      # - traefik.http.middlewares.blg-ratelimit.ratelimit.sourceCriterion.ipStrategy.depth=1
+      - traefik.http.middlewares.blg-bodysize.buffering.maxRequestBodyBytes=2097152
+      - traefik.http.services.blg.loadbalancer.server.port=8000
+
+  traefik:
+    image: traefik:v3
+    restart: unless-stopped
+    command:
+      # Talk to the socket proxy instead of the Docker socket: Traefik never
+      # gets a file descriptor for the real API, so a Traefik compromise can't
+      # escalate to root on the host by creating a privileged container.
+      - --providers.docker=true
+      - --providers.docker.endpoint=tcp://dockerproxy:2375
+      - --providers.docker.network=blg-edge
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      # Uncomment (with the WAF's egress IP) to trust its X-Forwarded-For, which
+      # is what the per-IP rate limit above needs. Only do this once the VM is
+      # unreachable except through the WAF -- otherwise the header is spoofable
+      # and the rate limit becomes trivial to bypass.
+      # - --entrypoints.websecure.forwardedHeaders.trustedIPs=<waf-egress-ip>/32
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/traefik-dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./deploy/certs:/certs:ro
+    networks:
+      - edge
+      - socket
+    depends_on:
+      - dockerproxy
+
+  # Read-only, filtered view of the Docker API. Traefik's docker provider needs
+  # to list and inspect containers and watch the event stream; everything else
+  # (exec, container create, volumes, secrets, ...) stays denied, which is what
+  # makes this different from handing over the socket with `:ro`. That flag only
+  # stops writes to the socket *file* -- every API call still goes through.
+  dockerproxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    environment:
+      # EVENTS/PING/VERSION default to allowed; CONTAINERS is the one addition.
+      - CONTAINERS=1
+      # Explicit rather than implicit: no state-changing calls, ever.
+      - POST=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket
+
+networks:
+  # Public-facing path: Traefik <-> backend.
+  edge:
+    name: blg-edge
+  # Traefik <-> socket proxy. `internal` means no route off the host, so the
+  # proxy cannot reach (or be reached from) anything outside this network.
+  socket:
+    name: blg-socket
+    internal: true

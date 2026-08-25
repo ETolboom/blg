@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from checks import Check, CheckFormInput
 from checks.manager import CheckRegistry
+from demo_mode import demo_mode_enabled
 from dependencies import (
     get_check_registry,
     get_rubric,
@@ -68,9 +69,12 @@ async def analyze_submission(
         model_xml = f.read()
 
     result = evaluate_model(model_xml, rubric.criteria, registry, rule_manager)
-    submission_service.write_eval(filename, result)
+    # The demo deployment is read-only: compose from the in-memory result so one
+    # visitor's grading run isn't persisted into the next visitor's session.
+    if not demo_mode_enabled():
+        submission_service.write_eval(filename, result)
 
-    return submission_service.compose_rubric(filename)
+    return submission_service.compose_rubric(filename, result=result)
 
 
 @router.post("/checks/analyze/all")

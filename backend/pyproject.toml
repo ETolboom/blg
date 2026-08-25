@@ -21,6 +21,7 @@ name = "blg"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
+    "defusedxml>=0.7.1",
     # spaCy model declared by release-wheel URL so `uv sync` tracks it instead of
     # pruning it (it used to be installed out-of-band via `spacy download`).
     "en_core_web_md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl",

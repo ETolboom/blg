@@ -92,14 +92,20 @@ class SubmissionService:
         with open(self._eval_path(filename), "w", encoding="utf-8") as f:
             f.write(result.model_dump_json())
 
-    def compose_rubric(self, filename: str) -> Rubric:
+    def compose_rubric(
+        self, filename: str, result: SubmissionResult | None = None
+    ) -> Rubric:
         """Compose a full Rubric by merging the ground-truth definition with a
         model's evaluation results. A missing evaluation yields ungraded
-        criteria (fulfilled=None) rather than an error."""
+        criteria (fulfilled=None) rather than an error.
+
+        Pass ``result`` to compose from an in-memory evaluation instead of the
+        persisted file (used where the result is deliberately not written)."""
         if self.rubric is None:
             raise HTTPException(status_code=404, detail="No rubric loaded")
 
-        result = self._read_eval(filename) or SubmissionResult()
+        if result is None:
+            result = self._read_eval(filename) or SubmissionResult()
         result_map = {cr.id: cr for cr in result.criteria}
 
         composed: list[RubricCriterion] = []
