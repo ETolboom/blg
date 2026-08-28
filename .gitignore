@@ -4,3 +4,6 @@
 
 # Demo TLS certs (self-signed; contains private key)
 /deploy/certs/
+
+# Deployment config (DEMO_DOMAIN, DEMO_DATA_DIR, ...)
+.env

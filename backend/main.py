@@ -159,8 +159,17 @@ if __name__ == "__main__":
     # Initialize the multi-project data layout: <root>/assignments + <root>/templates
     if not os.path.exists(data_root):
         print(f"Directory '{data_root}' not found. Creating it...")
-    os.makedirs(os.path.join(data_root, "assignments"), exist_ok=True)
-    os.makedirs(os.path.join(data_root, "templates"), exist_ok=True)
+    # In demo mode the data root is mounted read-only; missing directories are
+    # an error there, but creating them is neither possible nor needed.
+    demo_mode = demo_mode_enabled()
+    for subdir in ("assignments", "templates"):
+        path = os.path.join(data_root, subdir)
+        if os.path.isdir(path):
+            continue
+        if demo_mode:
+            print(f"Warning: '{path}' missing in read-only demo data root")
+            continue
+        os.makedirs(path, exist_ok=True)
 
     # Validate checks load before serving (dependencies loaded automatically)
     try:

@@ -8,6 +8,7 @@ services:
     volumes:
       # Mount the data root (assignments/ + global templates/)
       - ./backend/data:/app/data
+    platform: linux/amd64
     environment:
       - HOST=0.0.0.0
       - PORT=8000

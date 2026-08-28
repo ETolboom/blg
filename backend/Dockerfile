@@ -1,5 +1,5 @@
 # Stage 1: Build the Vue.js frontend with Bun
-FROM oven/bun:alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM oven/bun:alpine AS frontend-builder
 WORKDIR /frontend
 COPY frontend/package*.json frontend/bun.lock* ./
 RUN bun install --frozen-lockfile || bun install
