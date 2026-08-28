@@ -4,6 +4,8 @@ from enum import Enum
 from pathlib import Path
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
+from demo_mode import demo_mode_enabled
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,8 +119,12 @@ class BehavioralRuleManager:
     def __init__(self, rules_dir: str, templates_dir: str):
         # rules_dir is per-project; templates_dir is the global, shared library.
         self.rules_dir = Path(rules_dir)
-        self.rules_dir.mkdir(parents=True, exist_ok=True)
         self.templates_dir = Path(templates_dir)
+        # In demo mode the data root is read-only; a missing directory surfaces
+        # when it is read, so creating it is neither possible nor needed.
+        if demo_mode_enabled():
+            return
+        self.rules_dir.mkdir(parents=True, exist_ok=True)
         self.templates_dir.mkdir(parents=True, exist_ok=True)
 
     def get_template(self, rule_id: str) -> BehavioralRule | None:

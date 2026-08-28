@@ -5,6 +5,7 @@ import os
 from fastapi import HTTPException, Request
 
 from checks.manager import CheckRegistry
+from demo_mode import demo_mode_enabled
 from rubric import Assignment, RubricDefinition
 from rules.manager import BehavioralRuleManager
 from services.evaluation import evaluate_model
@@ -123,8 +124,12 @@ def set_active_project(app, name: str) -> None:
 
     # Populate the reference evaluation on first selection (cached thereafter;
     # kept fresh by save_rubric on any subsequent rubric/reference change).
-    if rubric is not None and not os.path.exists(
-        os.path.join(project_dir, "reference.bpmn.json")
+    # Skipped in demo mode: the data root is read-only, so the dataset must
+    # ship the cached reference.bpmn.json.
+    if (
+        rubric is not None
+        and not demo_mode_enabled()
+        and not os.path.exists(os.path.join(project_dir, "reference.bpmn.json"))
     ):
         recompute_reference_eval(app)
 

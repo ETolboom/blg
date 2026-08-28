@@ -14,6 +14,7 @@ from rubric import (
     SubmissionResult,
 )
 from checks import ThresholdMeta
+from demo_mode import demo_mode_enabled
 from utils import safe_join
 
 # Maximum accepted size for an uploaded .bpmn submission.
@@ -40,7 +41,10 @@ class SubmissionService:
         """Return filename, display name and analyzed flag for every .bpmn file
         in the submissions directory. ``analyzed`` is True when a per-model
         evaluation exists — only analyzed submissions can be exported."""
-        os.makedirs(self.submissions_path, exist_ok=True)
+        # In demo mode the data root is read-only; the directory is expected to
+        # exist, and a missing one fails on the listdir below with a clear error.
+        if not demo_mode_enabled():
+            os.makedirs(self.submissions_path, exist_ok=True)
         return [
             {
                 "filename": f,

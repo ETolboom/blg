@@ -22,6 +22,23 @@ from routers import behavioral_rules, behavioral_rule_groups
 logger = logging.getLogger(__name__)
 
 
+def ensure_data_layout(data_root: str) -> None:
+    """Ensure <root>/assignments and <root>/templates exist.
+
+    In demo mode the data root is mounted read-only; missing directories are
+    an error there, but creating them is neither possible nor needed.
+    """
+    demo_mode = demo_mode_enabled()
+    for subdir in ("assignments", "templates"):
+        path = os.path.join(data_root, subdir)
+        if os.path.isdir(path):
+            continue
+        if demo_mode:
+            logger.warning("'%s' missing in read-only demo data root", path)
+            continue
+        os.makedirs(path, exist_ok=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize global app state on startup.
@@ -35,8 +52,7 @@ async def lifespan(app: FastAPI):
     app.state.check_registry = registry
 
     # Ensure the multi-project layout exists.
-    os.makedirs(os.path.join(app.state.data_root, "assignments"), exist_ok=True)
-    os.makedirs(os.path.join(app.state.data_root, "templates"), exist_ok=True)
+    ensure_data_layout(app.state.data_root)
 
     # No project active until one is selected.
     app.state.active_project = None
@@ -159,17 +175,7 @@ if __name__ == "__main__":
     # Initialize the multi-project data layout: <root>/assignments + <root>/templates
     if not os.path.exists(data_root):
         print(f"Directory '{data_root}' not found. Creating it...")
-    # In demo mode the data root is mounted read-only; missing directories are
-    # an error there, but creating them is neither possible nor needed.
-    demo_mode = demo_mode_enabled()
-    for subdir in ("assignments", "templates"):
-        path = os.path.join(data_root, subdir)
-        if os.path.isdir(path):
-            continue
-        if demo_mode:
-            print(f"Warning: '{path}' missing in read-only demo data root")
-            continue
-        os.makedirs(path, exist_ok=True)
+    ensure_data_layout(data_root)
 
     # Validate checks load before serving (dependencies loaded automatically)
     try:
